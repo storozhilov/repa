@@ -6,7 +6,7 @@ class MultitrackRecorder
 public:
 	MultitrackRecorder();
 
-	void start();
+	void start(const char * location = 0, const char * device = 0);
 	void stop();
 };
 

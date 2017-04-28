@@ -11,7 +11,13 @@ fi
 
 set -x
 
-${script_dir}/sr &
+${script_dir}/sr --help
+
+location=$(mktemp -d)
+
+#${script_dir}/sr -D multi_capture -O "${location}" &
+#${script_dir}/sr -D multi_capture &
+${script_dir}/sr -O "${location}" &
 sr_pid=$!
 
 sleep 1
@@ -19,5 +25,7 @@ kill -TERM ${sr_pid}
 
 wait ${sr_pid}
 sr_exit_code=$?
+
+rm -Rf "${location}"
 
 exit ${sr_exit_code}

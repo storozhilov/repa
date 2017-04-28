@@ -3,7 +3,7 @@
 MultitrackRecorder::MultitrackRecorder()
 {}
 
-void MultitrackRecorder::start()
+void MultitrackRecorder::start(const char * location, const char * device)
 {
 }
 
