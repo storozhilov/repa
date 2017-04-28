@@ -9,7 +9,7 @@ class MultitrackRecorder
 public:
 	MultitrackRecorder();
 
-	void start(const char * location = 0, const char * device = 0);
+	void start(const std::string& location, const std::string& device);
 	void stop();
 private:
 	void runCapture();

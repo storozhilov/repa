@@ -6,7 +6,7 @@ MultitrackRecorder::MultitrackRecorder() :
 	_recordThread()
 {}
 
-void MultitrackRecorder::start(const char * location, const char * device)
+void MultitrackRecorder::start(const std::string& location, const std::string& device)
 {
 	_shouldRun = true;
 	_captureThread = boost::thread(boost::bind(&MultitrackRecorder::runCapture, this));

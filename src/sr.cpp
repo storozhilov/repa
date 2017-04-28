@@ -26,8 +26,9 @@ int main(int argc, char * argv[]) {
 	boost::program_options::options_description desc("Allowed options");
 	desc.add_options()
 		("help", "Produce help message")
-		("device,D", boost::program_options::value<std::string>(&device), "ALSA capture device")
-		("output,O", boost::program_options::value<std::string>(&location), "Location of the output")
+		("device,D", boost::program_options::value<std::string>(&device)->default_value("default"), "ALSA capture device")
+		("output,O", boost::program_options::value<std::string>(&location)->default_value(std::string(getcwd(NULL, 0))),
+		 "Location of the output")
 	;
 
 	boost::program_options::variables_map vm;
@@ -39,13 +40,11 @@ int main(int argc, char * argv[]) {
 		return 0;
 	}
 
-	std::cout << "Recording audio data from '" << (device.empty() ? "[default]" : device) <<
-		"' ALSA capture device to '" << (location.empty() ? getcwd(NULL, 0) : location) <<
-		"' location" << std::endl;
+	std::cout << "Recording audio data from '" << device << "' ALSA capture device to '" << location << "' location" << std::endl;
 	std::signal(SIGTERM, signal_handler);
 
 	MultitrackRecorder recorder;
-	recorder.start();
+	recorder.start(location, device);
 	while (!static_cast<bool>(stopped)) {
 		boost::this_thread::sleep(boost::posix_time::milliseconds(100));
 	}
