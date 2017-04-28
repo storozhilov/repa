@@ -2,7 +2,7 @@
 
 set -e
 
-echo "Building sr"
+echo "Building SR"
 
 script_dir=$(dirname $0)
 if [ "${script_dir:0:1}" != "/" ] ; then
@@ -13,4 +13,4 @@ sources="$(ls ${script_dir}/src/*.cpp)"
 
 set -x
 
-g++ ${sources} -o ${script_dir}/sr
+g++ ${sources} -lboost_system -lboost_thread -o ${script_dir}/sr
