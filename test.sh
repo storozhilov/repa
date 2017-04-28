@@ -2,15 +2,13 @@
 
 set -e
 
-echo "Building sr"
+echo "Testing sr"
 
 script_dir=$(dirname $0)
 if [ "${script_dir:0:1}" != "/" ] ; then
 	script_dir=$(pwd)/${script_dir}
 fi
 
-sources="$(ls ${script_dir}/src/*.cpp)"
-
 set -x
 
-g++ ${sources} -o ${script_dir}/sr
+${script_dir}/sr
