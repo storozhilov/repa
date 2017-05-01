@@ -2,7 +2,7 @@
 
 set -e
 
-echo "Building SR"
+echo "Building Repa"
 
 script_dir=$(dirname $0)
 if [ "${script_dir:0:1}" != "/" ] ; then
@@ -14,4 +14,4 @@ libraries="-lasound -lboost_program_options -lboost_system -lboost_thread"
 
 set -x
 
-g++ ${sources} ${libraries} -o ${script_dir}/sr
+g++ ${sources} ${libraries} -o ${script_dir}/repa

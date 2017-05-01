@@ -17,14 +17,13 @@ public:
 	void start(const std::string& location, const std::string& device);
 	void stop();
 private:
-	void runCapture();
-	void runRecord();
+	void runCapture(const std::string& device);
+	void runRecord(const std::string& location);
 
 	boost::atomic<bool> _shouldRun;
 	boost::thread _captureThread;
 	boost::thread _recordThread;
 
-	snd_pcm_t * _captureHandle;
 	snd_pcm_access_t _access;
 	snd_pcm_format_t _format;
 	snd_pcm_subformat_t _subformat;

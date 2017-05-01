@@ -11,13 +11,13 @@ fi
 
 set -x
 
-${script_dir}/sr --help
+${script_dir}/repa --help
 
 location=$(mktemp -d)
 
-#${script_dir}/sr -D multi_capture -O "${location}" &
-#${script_dir}/sr -D multi_capture &
-${script_dir}/sr -O "${location}" &
+#${script_dir}/repa -D multi_capture -O "${location}" &
+#${script_dir}/repa -D multi_capture &
+${script_dir}/repa -O "${location}" &
 sr_pid=$!
 
 sleep 1
