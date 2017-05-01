@@ -10,7 +10,7 @@ if [ "${script_dir:0:1}" != "/" ] ; then
 fi
 
 sources="$(ls ${script_dir}/src/*.cpp)"
-libraries="-lboost_program_options -lboost_system -lboost_thread"
+libraries="-lasound -lboost_program_options -lboost_system -lboost_thread"
 
 set -x
 
