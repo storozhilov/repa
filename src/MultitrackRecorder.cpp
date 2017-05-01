@@ -161,8 +161,10 @@ void MultitrackRecorder::runCapture(const std::string& device)
 	snd_pcm_hw_params_get_period_time(params, &_periodTime, &dir);
 	std::cout << "Period time: " << _periodTime << " us" << std::endl;
 
-	snd_pcm_hw_params_get_period_size(params, &_periodSize, &dir);
-	std::cout << "Period size: " << _periodSize << " frames" << std::endl;
+	snd_pcm_uframes_t periodSize;
+	snd_pcm_hw_params_get_period_size(params, &periodSize, &dir);
+	_periodSize = periodSize;
+	std::cout << "Period size: " << periodSize << " frames" << std::endl;
 
 	snd_pcm_hw_params_get_buffer_time(params, &_bufferTime, &dir);
 	std::cout << "Buffer time: " << _bufferTime << " us" << std::endl;
@@ -207,7 +209,7 @@ void MultitrackRecorder::runCapture(const std::string& device)
 namespace
 {
 
-template <typename Word> std::ostream& write_word(std::ostream& outs, const Word& value, std::size_t size = sizeof(Word))
+template <typename Word> std::ostream& write_word(std::ostream& outs, Word value, std::size_t size = sizeof(Word))
 {
 	for (; size; --size, value >>= 8) {
 		outs.put(static_cast<char>(value & 0xFF));
@@ -252,7 +254,7 @@ void MultitrackRecorder::runRecord(const std::string& location)
 		PeriodsQueue periodsQueue(_periodsQueue);
 		//PeriodsQueue periodsQueue;
 		//periodsQueue.swap(_periodsQueue);
-		PeriodBuffer periodBuffer = _periodsQueue.front();
+		//PeriodBuffer periodBuffer = _periodsQueue.front();
 	       	while (!_periodsQueue.empty()) {
 			_periodsQueue.pop();
 		}
@@ -262,17 +264,62 @@ void MultitrackRecorder::runRecord(const std::string& location)
 			std::cout << '+';
 		}
 
+		std::size_t data_chunk_pos = 0U;
+
 		if (targetFiles.empty()) {
 			targetFiles.resize(_channels);
 			for (std::size_t i = 0U; i < _channels; ++i) {
 				std::ostringstream filename;
 				filename << "track " << i << ".wav";
 				std::cout << "Opening '" << filename.str() << "' file" << std::endl;
-				std::ofstream * trackFile = new std::ofstream(filename.str().c_str(),
+				std::ofstream * targetFile = new std::ofstream(filename.str().c_str(),
 						std::ios_base::trunc | std::ios_base::binary);
-				// TODO: Write header
-				targetFiles[i] = trackFile;
+
+				// Writing header
+				*targetFile << "RIFF----WAVEfmt ";	// Chunk size to be filled in later
+				write_word(*targetFile, 16, 4);		// No extension data
+				write_word(*targetFile, 1, 2);		// TODO: PCM - integer samples
+				write_word(*targetFile, 1, 2);		// One channel (mono file)
+				write_word(*targetFile, 44100, 4);	// Samples per second (Hz)
+				write_word(*targetFile, 176400, 4);	// TODO: (Sample Rate * BitsPerSample * Channels) / 8
+				write_word(*targetFile, 2, 2);		// TODO: Data block size (size of one integer sample in bytes)
+				write_word(*targetFile, 16, 2);		// TODO: Number of bits per sample (use a multiple of 8)
+
+				// Write the data chunk header
+				if (data_chunk_pos == 0U) {
+					data_chunk_pos = targetFile->tellp();
+				}
+				*targetFile << "data----";		// Chunk size to be filled in later
+
+				targetFiles[i] = targetFile;
 			}
+		}
+
+		// Writing data to files
+		while (!periodsQueue.empty()) {
+			PeriodBuffer periodBuffer = periodsQueue.front();
+			periodsQueue.pop();
+
+			for (std::size_t i = 0U; i < targetFiles.size(); ++i) {
+				targetFiles[i]->write(&periodBuffer[i * _periodSize], _periodSize);
+			}
+		}
+
+		// Updating headers
+		for (std::size_t i = 0U; i < targetFiles.size(); ++i) {
+			//targetFiles[i]->write();
+			std::size_t file_length = targetFiles[i]->tellp();
+
+			// Fix the data chunk header to contain the data size
+			targetFiles[i]->seekp(data_chunk_pos + 4);
+			write_word(*targetFiles[i], file_length - data_chunk_pos + 8);
+
+			// Fix the file header to contain the proper RIFF chunk size, which is (file size - 8) bytes
+			targetFiles[i]->seekp(4);
+			write_word(*targetFiles[i], file_length - 8, 4);
+
+			// Moving back to EOF
+			targetFiles[i]->seekp(file_length);
 		}
 	}
 /*

@@ -37,7 +37,7 @@ private:
 	unsigned int _rate;
 	boost::atomic<unsigned int> _channels;
 	unsigned int _periodTime;
-	snd_pcm_uframes_t _periodSize;
+	boost::atomic<unsigned int> _periodSize;
 	unsigned int _bufferTime;
 
 	boost::atomic<std::size_t> _periodBufferSize;
