@@ -18,7 +18,10 @@ MultitrackRecorder::MultitrackRecorder() :
 	_periodTime(),
 	_periodSize(),
 	_bufferTime(),
-	_captureBuffer()
+	_periodBufferSize(0U),
+	_periodsQueue(),
+	_periodsQueueCond(),
+	_periodsQueueMutex()
 {
 	std::cout << "ALSA library version: " << SND_LIB_VERSION_STR << std::endl;
 	std::cout << "PCM stream types:" << std::endl;
@@ -94,7 +97,7 @@ void MultitrackRecorder::runCapture(const std::string& device)
 		}
 	private:
 		snd_pcm_t * _handle;
-	} cleanup(handle);
+	} alsaCleanup(handle);
 
 	snd_pcm_hw_params_t * params;
 	snd_pcm_hw_params_alloca(&params);
@@ -172,13 +175,14 @@ void MultitrackRecorder::runCapture(const std::string& device)
 			snd_pcm_format_description(_format) << ')';
 		throw std::runtime_error(msg.str());
 	}
-	unsigned int bufferSize = _periodSize * _channels * sampleBytes;
-	std::cout << "Allocating " << bufferSize << " bytes capture buffer" << std::endl;
-	_captureBuffer.resize(bufferSize);
+	_periodBufferSize = _periodSize * _channels * sampleBytes;
+	std::cout << "Allocating " << _periodBufferSize << " bytes capture buffer" << std::endl;
+	PeriodBuffer periodBuffer(_periodBufferSize);
+	periodBuffer.resize(_periodBufferSize); // TODO: ???
 	// TODO: Other params
 
 	while (_shouldRun) {
-		int rc = snd_pcm_readi(handle, &_captureBuffer[0], _periodSize);
+		int rc = snd_pcm_readi(handle, &periodBuffer[0], _periodSize);
 		if (rc == -EPIPE) {
 			/* EPIPE means overrun */
 			std::cerr << "ERROR: Overrun occurred" << std::endl;
@@ -188,6 +192,7 @@ void MultitrackRecorder::runCapture(const std::string& device)
 			std::cerr << "ERROR: Reading data error: " << snd_strerror(rc) << std::endl;
 			return;
 		} else if (rc != _periodSize) {
+			// TODO: Special handling
 			std::cerr << "WARNING: Short read, read " << rc << "/" << _periodSize << " frames" << std::endl;
 		}
 		std::cout << '.';
