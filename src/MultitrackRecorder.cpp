@@ -153,8 +153,10 @@ void MultitrackRecorder::runCapture(const std::string& device)
 	snd_pcm_hw_params_get_rate(params, &_rate, &dir);
 	std::cout << "Sample rate: " << _rate << " bps" << std::endl;
 
-	snd_pcm_hw_params_get_channels(params, &_channels);
-	std::cout << "Channels: " << _channels << std::endl;
+	unsigned int channels;
+	snd_pcm_hw_params_get_channels(params, &channels);
+	_channels = channels;
+	std::cout << "Channels: " << channels << std::endl;
 
 	snd_pcm_hw_params_get_period_time(params, &_periodTime, &dir);
 	std::cout << "Period time: " << _periodTime << " us" << std::endl;
@@ -196,7 +198,9 @@ void MultitrackRecorder::runCapture(const std::string& device)
 			std::cerr << "WARNING: Short read, read " << rc << "/" << _periodSize << " frames" << std::endl;
 		}
 		std::cout << '.';
-		//boost::this_thread::sleep(boost::posix_time::milliseconds(100));
+		boost::unique_lock<boost::mutex> lock(_periodsQueueMutex);
+		_periodsQueue.push(periodBuffer);
+		_periodsQueueCond.notify_all();
 	}
 }
 
@@ -215,8 +219,61 @@ template <typename Word> std::ostream& write_word(std::ostream& outs, const Word
 
 void MultitrackRecorder::runRecord(const std::string& location)
 {
+	//std::ofstream wavFile();
+
+	typedef std::vector<std::ofstream *> TargetFiles;
+	TargetFiles targetFiles;
+
+	class FilesCleanup {
+	public:
+		FilesCleanup(TargetFiles& targetFiles) :
+			_targetFiles(targetFiles)
+		{}
+
+		~FilesCleanup()
+		{
+			// TODO Close files
+			for (std::size_t i = 0U; i < _targetFiles.size(); ++i) {
+				std::cout << "Closing " << i << "-th file" << std::endl;
+				delete _targetFiles[i];
+			}
+			_targetFiles.clear();
+		}
+
+	private:
+		TargetFiles& _targetFiles;
+	} cleanup(targetFiles);
+
 	while (_shouldRun) {
-		boost::this_thread::sleep(boost::posix_time::milliseconds(100));
+		boost::unique_lock<boost::mutex> lock(_periodsQueueMutex);
+		if (_periodsQueue.empty()) {
+			continue;
+		}
+		PeriodsQueue periodsQueue(_periodsQueue);
+		//PeriodsQueue periodsQueue;
+		//periodsQueue.swap(_periodsQueue);
+		PeriodBuffer periodBuffer = _periodsQueue.front();
+	       	while (!_periodsQueue.empty()) {
+			_periodsQueue.pop();
+		}
+		lock.unlock();
+
+		for (std::size_t i = 0U; i < periodsQueue.size(); ++i) {
+			std::cout << '+';
+		}
+
+		if (targetFiles.empty()) {
+			targetFiles.resize(_channels);
+			for (std::size_t i = 0U; i < _channels; ++i) {
+				std::ostringstream filename;
+				filename << "track " << i << ".wav";
+				std::cout << "Opening '" << filename.str() << "' file" << std::endl;
+				std::ofstream * trackFile = new std::ofstream(filename.str().c_str(),
+						std::ios_base::trunc | std::ios_base::binary);
+				// TODO: Write header
+				targetFiles[i] = trackFile;
+			}
+		}
 	}
 /*
 	using namespace std;
