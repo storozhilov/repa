@@ -281,8 +281,8 @@ void MultitrackRecorder::runRecord(const std::string& location)
 				write_word(*targetFile, 1, 2);		// TODO: PCM - integer samples
 				write_word(*targetFile, 1, 2);		// One channel (mono file)
 				write_word(*targetFile, 44100, 4);	// Samples per second (Hz)
-				write_word(*targetFile, 176400, 4);	// TODO: (Sample Rate * BitsPerSample * Channels) / 8
-				write_word(*targetFile, 2, 2);		// TODO: Data block size (size of one integer sample in bytes)
+				write_word(*targetFile, 88200, 4);	// TODO: (Sample Rate * BitsPerSample * Channels) / 8
+				write_word(*targetFile, 2, 2);		// TODO: (NumChannels * BitsPerSample) / 8
 				write_word(*targetFile, 16, 2);		// TODO: Number of bits per sample (use a multiple of 8)
 
 				// Write the data chunk header
@@ -307,19 +307,19 @@ void MultitrackRecorder::runRecord(const std::string& location)
 
 		// Updating headers
 		for (std::size_t i = 0U; i < targetFiles.size(); ++i) {
-			//targetFiles[i]->write();
 			std::size_t file_length = targetFiles[i]->tellp();
 
 			// Fix the data chunk header to contain the data size
 			targetFiles[i]->seekp(data_chunk_pos + 4);
-			write_word(*targetFiles[i], file_length - data_chunk_pos + 8);
+			write_word(*targetFiles[i], file_length - data_chunk_pos + 8, 4);
 
 			// Fix the file header to contain the proper RIFF chunk size, which is (file size - 8) bytes
 			targetFiles[i]->seekp(4);
 			write_word(*targetFiles[i], file_length - 8, 4);
 
 			// Moving back to EOF
-			targetFiles[i]->seekp(file_length);
+			//targetFiles[i]->seekp(file_length);
+			targetFiles[i]->seekp(0, std::ios_base::end);
 		}
 	}
 /*
