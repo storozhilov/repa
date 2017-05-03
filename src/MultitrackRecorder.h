@@ -20,8 +20,8 @@ public:
 	void start(const std::string& location, const std::string& device);
 	void stop();
 private:
-	typedef std::vector<char> PeriodBuffer;
-	typedef std::queue<PeriodBuffer> PeriodsQueue;
+	typedef std::vector<char> CaptureBuffer;
+	typedef std::queue<CaptureBuffer> CaptureQueue;
 
 	void runCapture(const std::string& device);
 	void runRecord(const std::string& location);
@@ -41,9 +41,9 @@ private:
 	unsigned int _bufferTime;
 
 	boost::atomic<std::size_t> _periodBufferSize;
-	PeriodsQueue _periodsQueue;
-	boost::condition_variable _periodsQueueCond;
-	boost::mutex _periodsQueueMutex;
+	CaptureQueue _captureQueue;
+	boost::condition_variable _captureQueueCond;
+	boost::mutex _captureQueueMutex;
 };
 
 #endif

@@ -5,6 +5,7 @@
 #include <iostream>
 #include <cmath>
 #include <fstream>
+#include <cstring>
 
 MultitrackRecorder::MultitrackRecorder() :
 	_shouldRun(false),
@@ -19,9 +20,9 @@ MultitrackRecorder::MultitrackRecorder() :
 	_periodSize(),
 	_bufferTime(),
 	_periodBufferSize(0U),
-	_periodsQueue(),
-	_periodsQueueCond(),
-	_periodsQueueMutex()
+	_captureQueue(),
+	_captureQueueCond(),
+	_captureQueueMutex()
 {
 	std::cout << "ALSA library version: " << SND_LIB_VERSION_STR << std::endl;
 	std::cout << "PCM stream types:" << std::endl;
@@ -181,12 +182,12 @@ void MultitrackRecorder::runCapture(const std::string& device)
 	}
 	_periodBufferSize = _periodSize * _channels * sampleBytes;
 	std::cout << "Allocating " << _periodBufferSize << " bytes capture buffer" << std::endl;
-	PeriodBuffer periodBuffer(_periodBufferSize);
-	periodBuffer.resize(_periodBufferSize); // TODO: ???
+	CaptureBuffer captureBuffer(_periodBufferSize);
+	captureBuffer.resize(_periodBufferSize); // TODO: ???
 	// TODO: Other params
 
 	while (_shouldRun) {
-		int rc = snd_pcm_readi(handle, &periodBuffer[0], _periodSize);
+		int rc = snd_pcm_readi(handle, &captureBuffer[0], _periodSize);
 		if (rc == -EPIPE) {
 			/* EPIPE means overrun */
 			std::cerr << "ERROR: Overrun occurred" << std::endl;
@@ -200,9 +201,9 @@ void MultitrackRecorder::runCapture(const std::string& device)
 			std::cerr << "WARNING: Short read, read " << rc << "/" << _periodSize << " frames" << std::endl;
 		}
 		std::cout << '.';
-		boost::unique_lock<boost::mutex> lock(_periodsQueueMutex);
-		_periodsQueue.push(periodBuffer);
-		_periodsQueueCond.notify_all();
+		boost::unique_lock<boost::mutex> lock(_captureQueueMutex);
+		_captureQueue.push(captureBuffer);
+		_captureQueueCond.notify_all();
 	}
 }
 
@@ -246,27 +247,30 @@ void MultitrackRecorder::runRecord(const std::string& location)
 		TargetFiles& _targetFiles;
 	} cleanup(targetFiles);
 
+	CaptureBuffer recordBuffer;
+
 	while (_shouldRun) {
-		boost::unique_lock<boost::mutex> lock(_periodsQueueMutex);
-		if (_periodsQueue.empty()) {
+		boost::unique_lock<boost::mutex> lock(_captureQueueMutex);
+		if (_captureQueue.empty()) {
 			continue;
 		}
-		PeriodsQueue periodsQueue(_periodsQueue);
-		//PeriodsQueue periodsQueue;
-		//periodsQueue.swap(_periodsQueue);
-		//PeriodBuffer periodBuffer = _periodsQueue.front();
-	       	while (!_periodsQueue.empty()) {
-			_periodsQueue.pop();
+		//CaptureQueue captureQueue;
+		//captureQueue.swap(_captureQueue);
+		CaptureQueue captureQueue(_captureQueue);
+		while (!_captureQueue.empty()) {
+			_captureQueue.pop();
 		}
 		lock.unlock();
 
-		for (std::size_t i = 0U; i < periodsQueue.size(); ++i) {
+		for (std::size_t i = 0U; i < captureQueue.size(); ++i) {
 			std::cout << '+';
 		}
 
 		std::size_t data_chunk_pos = 0U;
 
 		if (targetFiles.empty()) {
+			recordBuffer.resize(_periodBufferSize);
+
 			targetFiles.resize(_channels);
 			for (std::size_t i = 0U; i < _channels; ++i) {
 				std::ostringstream filename;
@@ -295,13 +299,35 @@ void MultitrackRecorder::runRecord(const std::string& location)
 			}
 		}
 
+		bool debugPrinted = false;
 		// Writing data to files
-		while (!periodsQueue.empty()) {
-			PeriodBuffer periodBuffer = periodsQueue.front();
-			periodsQueue.pop();
+		while (!captureQueue.empty()) {
+			CaptureBuffer captureBuffer = captureQueue.front();
+
+			std::size_t bytesPerSample = 2U;	// TODO: Extract bytes per sample
+			for (std::size_t i = 0; i < _periodBufferSize; i += bytesPerSample) {
+				std::size_t frame = i / bytesPerSample / _channels;
+				std::size_t channel = i / bytesPerSample % _channels;
+				std::size_t j = channel * _periodSize * bytesPerSample + frame * bytesPerSample;
+
+				/*if (!debugPrinted) {
+					std::cout << ">>> captureBuffer.size(): " << captureBuffer.size() <<
+						", recordBuffer.size(): " << recordBuffer.size() <<
+						", _periodBufferSize: " << _periodBufferSize <<
+						", _periodSize: " << _periodSize <<
+						", i: " << i << ", frame: " << frame << ", channel: " << channel <<
+						", j: " << j << std::endl;
+				}*/
+
+				memcpy(&recordBuffer[j], &captureBuffer[i], bytesPerSample);
+			}
+			debugPrinted = true;
+
+			captureQueue.pop();
 
 			for (std::size_t i = 0U; i < targetFiles.size(); ++i) {
-				targetFiles[i]->write(&periodBuffer[i * _periodSize], _periodSize);
+				std::cout << ">>> Writing " << _periodSize * bytesPerSample << " bytes to " << i << "-th file" << std::endl;
+				targetFiles[i]->write(&recordBuffer[i * _periodSize * bytesPerSample], _periodSize * bytesPerSample);
 			}
 		}
 

@@ -14,4 +14,4 @@ libraries="-lasound -lboost_program_options -lboost_system -lboost_thread"
 
 set -x
 
-g++ ${sources} ${libraries} -o ${script_dir}/repa
+g++ ${sources} ${libraries} -g -o ${script_dir}/repa
