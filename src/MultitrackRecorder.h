@@ -34,7 +34,8 @@ private:
 	snd_pcm_access_t _access;
 	snd_pcm_format_t _format;
 	snd_pcm_subformat_t _subformat;
-	unsigned int _rate;
+	boost::atomic<unsigned int> _rate;
+	boost::atomic<unsigned int> _bytesPerSample;
 	boost::atomic<unsigned int> _channels;
 	unsigned int _periodTime;
 	boost::atomic<unsigned int> _periodSize;

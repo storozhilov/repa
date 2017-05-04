@@ -15,6 +15,7 @@ MultitrackRecorder::MultitrackRecorder() :
 	_format(),
 	_subformat(),
 	_rate(),
+	_bytesPerSample(),
 	_channels(),
 	_periodTime(),
 	_periodSize(),
@@ -61,6 +62,11 @@ void MultitrackRecorder::start(const std::string& location, const std::string& d
 void MultitrackRecorder::stop()
 {
 	_shouldRun = false;
+
+	boost::unique_lock<boost::mutex> lock(_captureQueueMutex);
+	_captureQueueCond.notify_all();
+	lock.unlock();
+
 	_captureThread.join();
 	_recordThread.join();
 }
@@ -151,7 +157,9 @@ void MultitrackRecorder::runCapture(const std::string& device)
 	snd_pcm_hw_params_get_subformat(params, &_subformat);
 	std::cout << "Subformat: " << snd_pcm_subformat_name(_subformat) << ", " << snd_pcm_subformat_description(_subformat) << std::endl;
 
-	snd_pcm_hw_params_get_rate(params, &_rate, &dir);
+	unsigned int rate;
+	snd_pcm_hw_params_get_rate(params, &rate, &dir);
+	_rate = rate;
 	std::cout << "Sample rate: " << _rate << " bps" << std::endl;
 
 	unsigned int channels;
@@ -171,16 +179,18 @@ void MultitrackRecorder::runCapture(const std::string& device)
 	std::cout << "Buffer time: " << _bufferTime << " us" << std::endl;
 
 	// TODO: Correct sample bytes calculation
-	std::size_t sampleBytes = 2;
+	std::size_t bytesPerSample = 2;
 	if (_format == SND_PCM_FORMAT_S32_LE) {
-		sampleBytes = 4;
+		bytesPerSample = 4;
 	} else if (_format != SND_PCM_FORMAT_S16_LE) {
 		std::ostringstream msg;
 		msg << "Unsupported format: " << snd_pcm_format_name(_format) << '(' <<
 			snd_pcm_format_description(_format) << ')';
 		throw std::runtime_error(msg.str());
 	}
-	_periodBufferSize = _periodSize * _channels * sampleBytes;
+	_bytesPerSample = bytesPerSample;
+	std::cout << "Bytes per sample: " << _bytesPerSample << std::endl;
+	_periodBufferSize = _periodSize * _channels * bytesPerSample;
 	std::cout << "Allocating " << _periodBufferSize << " bytes capture buffer" << std::endl;
 	CaptureBuffer captureBuffer(_periodBufferSize);
 	captureBuffer.resize(_periodBufferSize); // TODO: ???
@@ -250,11 +260,17 @@ void MultitrackRecorder::runRecord(const std::string& location)
 	CaptureBuffer recordBuffer;
 
 	std::size_t data_chunk_pos = 0U;
+	bool streamDataInitialized = false;
+	unsigned int rate;
+	unsigned int bytesPerSample;
 
 	while (_shouldRun) {
 		boost::unique_lock<boost::mutex> lock(_captureQueueMutex);
-		if (_captureQueue.empty()) {
-			continue;
+		while (_captureQueue.empty()) {
+			_captureQueueCond.wait(lock);
+			if (!_shouldRun) {
+				break;
+			}
 		}
 		//CaptureQueue captureQueue;
 		//captureQueue.swap(_captureQueue);
@@ -266,6 +282,12 @@ void MultitrackRecorder::runRecord(const std::string& location)
 
 		for (std::size_t i = 0U; i < captureQueue.size(); ++i) {
 			std::cout << '+';
+		}
+
+		if (!streamDataInitialized) {
+			rate = _rate;
+			bytesPerSample = _bytesPerSample;
+			streamDataInitialized = true;
 		}
 
 		if (targetFiles.empty()) {
@@ -280,14 +302,14 @@ void MultitrackRecorder::runRecord(const std::string& location)
 						std::ios_base::trunc | std::ios_base::binary);
 
 				// Writing header
-				*targetFile << "RIFF----WAVEfmt ";	// Chunk size to be filled in later
-				write_word(*targetFile, 16, 4);		// No extension data
-				write_word(*targetFile, 1, 2);		// TODO: PCM - integer samples
-				write_word(*targetFile, 1, 2);		// One channel (mono file)
-				write_word(*targetFile, 44100, 4);	// Samples per second (Hz)
-				write_word(*targetFile, 88200, 4);	// TODO: (Sample Rate * BitsPerSample * Channels) / 8
-				write_word(*targetFile, 2, 2);		// TODO: (NumChannels * BitsPerSample) / 8
-				write_word(*targetFile, 16, 2);		// TODO: Number of bits per sample (use a multiple of 8)
+				*targetFile << "RIFF----WAVEfmt ";			// Chunk size to be filled in later
+				write_word(*targetFile, 16, 4);				// No extension data
+				write_word(*targetFile, 1, 2);				// 1 - PCM audio format
+				write_word(*targetFile, 1, 2);				// One channel (mono file)
+				write_word(*targetFile, rate, 4);			// Samples per second (Hz)
+				write_word(*targetFile, rate * bytesPerSample, 4);	// (Sample Rate * BitsPerSample * Channels) / 8
+				write_word(*targetFile, bytesPerSample, 2);		// (NumChannels * BitsPerSample) / 8
+				write_word(*targetFile, bytesPerSample * 8, 2);		// Number of bits per sample (use a multiple of 8)
 
 				// Write the data chunk header
 				if (data_chunk_pos == 0U) {
