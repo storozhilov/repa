@@ -30,18 +30,12 @@ private:
 	boost::thread _captureThread;
 	boost::thread _recordThread;
 
-	// TODO: Make atomic or remove
-	snd_pcm_access_t _access;
-	snd_pcm_format_t _format;
-	snd_pcm_subformat_t _subformat;
 	boost::atomic<unsigned int> _rate;
 	boost::atomic<unsigned int> _bytesPerSample;
 	boost::atomic<unsigned int> _channels;
-	unsigned int _periodTime;
 	boost::atomic<unsigned int> _periodSize;
-	unsigned int _bufferTime;
-
 	boost::atomic<std::size_t> _periodBufferSize;
+
 	CaptureQueue _captureQueue;
 	boost::condition_variable _captureQueueCond;
 	boost::mutex _captureQueueMutex;

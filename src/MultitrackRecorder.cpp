@@ -11,15 +11,10 @@ MultitrackRecorder::MultitrackRecorder() :
 	_shouldRun(false),
 	_captureThread(),
 	_recordThread(),
-	_access(),
-	_format(),
-	_subformat(),
 	_rate(),
 	_bytesPerSample(),
 	_channels(),
-	_periodTime(),
 	_periodSize(),
-	_bufferTime(),
 	_periodBufferSize(0U),
 	_captureQueue(),
 	_captureQueueCond(),
@@ -148,14 +143,17 @@ void MultitrackRecorder::runCapture(const std::string& device)
 	std::cout << "PCM handle name: " << snd_pcm_name(handle) << std::endl <<
 		"PCM state: " << snd_pcm_state_name(snd_pcm_state(handle)) << std::endl;
 
-	snd_pcm_hw_params_get_access(params, &_access);
-	std::cout << "Access type: " << snd_pcm_access_name(_access) << std::endl;
+	snd_pcm_access_t access;
+	snd_pcm_hw_params_get_access(params, &access);
+	std::cout << "Access type: " << snd_pcm_access_name(access) << std::endl;
 
-	snd_pcm_hw_params_get_format(params, &_format);
-	std::cout << "Format: " << snd_pcm_format_name(_format) << ", " << snd_pcm_format_description(_format) << std::endl;
+	snd_pcm_format_t format;
+	snd_pcm_hw_params_get_format(params, &format);
+	std::cout << "Format: " << snd_pcm_format_name(format) << ", " << snd_pcm_format_description(format) << std::endl;
 
-	snd_pcm_hw_params_get_subformat(params, &_subformat);
-	std::cout << "Subformat: " << snd_pcm_subformat_name(_subformat) << ", " << snd_pcm_subformat_description(_subformat) << std::endl;
+	snd_pcm_subformat_t subformat;
+	snd_pcm_hw_params_get_subformat(params, &subformat);
+	std::cout << "Subformat: " << snd_pcm_subformat_name(subformat) << ", " << snd_pcm_subformat_description(subformat) << std::endl;
 
 	unsigned int rate;
 	snd_pcm_hw_params_get_rate(params, &rate, &dir);
@@ -167,25 +165,27 @@ void MultitrackRecorder::runCapture(const std::string& device)
 	_channels = channels;
 	std::cout << "Channels: " << channels << std::endl;
 
-	snd_pcm_hw_params_get_period_time(params, &_periodTime, &dir);
-	std::cout << "Period time: " << _periodTime << " us" << std::endl;
+	unsigned int periodTime;
+	snd_pcm_hw_params_get_period_time(params, &periodTime, &dir);
+	std::cout << "Period time: " << periodTime << " us" << std::endl;
 
 	snd_pcm_uframes_t periodSize;
 	snd_pcm_hw_params_get_period_size(params, &periodSize, &dir);
 	_periodSize = periodSize;
 	std::cout << "Period size: " << periodSize << " frames" << std::endl;
 
-	snd_pcm_hw_params_get_buffer_time(params, &_bufferTime, &dir);
-	std::cout << "Buffer time: " << _bufferTime << " us" << std::endl;
+	unsigned int bufferTime;
+	snd_pcm_hw_params_get_buffer_time(params, &bufferTime, &dir);
+	std::cout << "Buffer time: " << bufferTime << " us" << std::endl;
 
 	// TODO: Correct sample bytes calculation
 	std::size_t bytesPerSample = 2;
-	if (_format == SND_PCM_FORMAT_S32_LE) {
+	if (format == SND_PCM_FORMAT_S32_LE) {
 		bytesPerSample = 4;
-	} else if (_format != SND_PCM_FORMAT_S16_LE) {
+	} else if (format != SND_PCM_FORMAT_S16_LE) {
 		std::ostringstream msg;
-		msg << "Unsupported format: " << snd_pcm_format_name(_format) << '(' <<
-			snd_pcm_format_description(_format) << ')';
+		msg << "Unsupported format: " << snd_pcm_format_name(format) << '(' <<
+			snd_pcm_format_description(format) << ')';
 		throw std::runtime_error(msg.str());
 	}
 	_bytesPerSample = bytesPerSample;
@@ -256,10 +256,11 @@ void MultitrackRecorder::runRecord(const std::string& location)
 
 	CaptureBuffer recordBuffer;
 
-	std::size_t data_chunk_pos = 0U;
+	std::size_t dataChunkPos = 0U;
 	bool streamDataInitialized = false;
 	unsigned int rate;
 	unsigned int bytesPerSample;
+	unsigned int channels;
 
 	while (_shouldRun) {
 		boost::unique_lock<boost::mutex> lock(_captureQueueMutex);
@@ -284,14 +285,15 @@ void MultitrackRecorder::runRecord(const std::string& location)
 		if (!streamDataInitialized) {
 			rate = _rate;
 			bytesPerSample = _bytesPerSample;
+			channels = _channels;
 			streamDataInitialized = true;
 		}
 
 		if (targetFiles.empty()) {
 			recordBuffer.resize(_periodBufferSize);
 
-			targetFiles.resize(_channels);
-			for (std::size_t i = 0U; i < _channels; ++i) {
+			targetFiles.resize(channels);
+			for (std::size_t i = 0U; i < channels; ++i) {
 				std::ostringstream filename;
 				filename << "track_" << i << ".wav";
 				std::cout << "Opening '" << filename.str() << "' file" << std::endl;
@@ -309,8 +311,8 @@ void MultitrackRecorder::runRecord(const std::string& location)
 				write_word(*targetFile, bytesPerSample * 8, 2);		// Number of bits per sample (use a multiple of 8)
 
 				// Write the data chunk header
-				if (data_chunk_pos == 0U) {
-					data_chunk_pos = targetFile->tellp();
+				if (dataChunkPos == 0U) {
+					dataChunkPos = targetFile->tellp();
 				}
 				*targetFile << "data----";		// Chunk size to be filled in later
 
@@ -323,8 +325,8 @@ void MultitrackRecorder::runRecord(const std::string& location)
 			CaptureBuffer captureBuffer = captureQueue.front();
 
 			for (std::size_t i = 0; i < _periodBufferSize; i += bytesPerSample) {
-				std::size_t frame = i / bytesPerSample / _channels;
-				std::size_t channel = i / bytesPerSample % _channels;
+				std::size_t frame = i / bytesPerSample / channels;
+				std::size_t channel = i / bytesPerSample % channels;
 				std::size_t j = channel * _periodSize * bytesPerSample + frame * bytesPerSample;
 
 				memcpy(&recordBuffer[j], &captureBuffer[i], bytesPerSample);
@@ -339,13 +341,13 @@ void MultitrackRecorder::runRecord(const std::string& location)
 
 		// Updating headers
 		for (std::size_t i = 0U; i < targetFiles.size(); ++i) {
-			std::size_t file_length = targetFiles[i]->tellp();
+			std::size_t fileLength = targetFiles[i]->tellp();
 
-			std::size_t chunkSize = file_length - 8;
-			std::size_t subchunkSize = file_length - data_chunk_pos - 8;
+			std::size_t chunkSize = fileLength - 8;
+			std::size_t subchunkSize = fileLength - dataChunkPos - 8;
 
 			// Fix the data chunk header to contain the data size
-			targetFiles[i]->seekp(data_chunk_pos + 4);
+			targetFiles[i]->seekp(dataChunkPos + 4);
 			write_word(*targetFiles[i], subchunkSize, 4);
 
 			// Fix the file header to contain the proper RIFF chunk size, which is (file size - 8) bytes
