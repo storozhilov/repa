@@ -249,6 +249,8 @@ void MultitrackRecorder::runRecord(const std::string& location)
 
 	CaptureBuffer recordBuffer;
 
+	std::size_t data_chunk_pos = 0U;
+
 	while (_shouldRun) {
 		boost::unique_lock<boost::mutex> lock(_captureQueueMutex);
 		if (_captureQueue.empty()) {
@@ -265,8 +267,6 @@ void MultitrackRecorder::runRecord(const std::string& location)
 		for (std::size_t i = 0U; i < captureQueue.size(); ++i) {
 			std::cout << '+';
 		}
-
-		std::size_t data_chunk_pos = 0U;
 
 		if (targetFiles.empty()) {
 			recordBuffer.resize(_periodBufferSize);
@@ -326,7 +326,7 @@ void MultitrackRecorder::runRecord(const std::string& location)
 			captureQueue.pop();
 
 			for (std::size_t i = 0U; i < targetFiles.size(); ++i) {
-				std::cout << ">>> Writing " << _periodSize * bytesPerSample << " bytes to " << i << "-th file" << std::endl;
+				//std::cout << ">>> Writing " << _periodSize * bytesPerSample << " bytes to " << i << "-th file" << std::endl;
 				targetFiles[i]->write(&recordBuffer[i * _periodSize * bytesPerSample], _periodSize * bytesPerSample);
 			}
 		}
@@ -335,13 +335,19 @@ void MultitrackRecorder::runRecord(const std::string& location)
 		for (std::size_t i = 0U; i < targetFiles.size(); ++i) {
 			std::size_t file_length = targetFiles[i]->tellp();
 
+			std::size_t chunkSize = file_length - 8;
+			std::size_t subchunkSize = file_length - data_chunk_pos - 8;
+
+			//std::cout << ">>> Writing " << chunkSize << "/" << subchunkSize <<
+			//	" chunk/subchunk size, file_length: " << file_length <<
+			//	", data_chunk_pos: " << data_chunk_pos << std::endl;
 			// Fix the data chunk header to contain the data size
 			targetFiles[i]->seekp(data_chunk_pos + 4);
-			write_word(*targetFiles[i], file_length - data_chunk_pos + 8, 4);
+			write_word(*targetFiles[i], subchunkSize, 4);
 
 			// Fix the file header to contain the proper RIFF chunk size, which is (file size - 8) bytes
 			targetFiles[i]->seekp(4);
-			write_word(*targetFiles[i], file_length - 8, 4);
+			write_word(*targetFiles[i], chunkSize, 4);
 
 			// Moving back to EOF
 			//targetFiles[i]->seekp(file_length);
