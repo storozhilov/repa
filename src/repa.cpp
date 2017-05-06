@@ -42,13 +42,14 @@ int main(int argc, char * argv[]) {
 
 	std::cout << "Recording audio data from '" << device << "' ALSA capture device to '" << location << "' location" << std::endl;
 	std::signal(SIGTERM, signal_handler);
+	std::signal(SIGINT, signal_handler);
 
 	MultitrackRecorder recorder;
 	recorder.start(location, device);
 	while (!static_cast<bool>(stopped)) {
 		boost::this_thread::sleep(boost::posix_time::milliseconds(100));
 	}
-	std::cout << "SIGTERM received -> exiting" << std::endl;
+	std::cout << "Termination command received -> exiting" << std::endl;
 	recorder.stop();
 	return 0;
 }
