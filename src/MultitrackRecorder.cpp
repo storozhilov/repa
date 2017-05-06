@@ -117,11 +117,6 @@ void MultitrackRecorder::runCapture(const std::string& device)
 		std::cerr << "WARNING: Requesting format error: " << snd_strerror(rc) <<std::endl;
 	}
 
-	rc = snd_pcm_hw_params_set_channels(handle, params, 2);
-	if (rc < 0) {
-		std::cerr << "WARNING: Requesting channels amount error: " << snd_strerror(rc) <<std::endl;
-	}
-
 	unsigned int val;
 	int dir;
 
@@ -193,7 +188,6 @@ void MultitrackRecorder::runCapture(const std::string& device)
 	_periodBufferSize = _periodSize * _channels * bytesPerSample;
 	std::cout << "Allocating " << _periodBufferSize << " bytes capture buffer" << std::endl;
 	CaptureBuffer captureBuffer(_periodBufferSize);
-	captureBuffer.resize(_periodBufferSize); // TODO: ???
 	// TODO: Other params
 
 	while (_shouldRun) {
