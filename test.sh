@@ -18,14 +18,14 @@ location=$(mktemp -d)
 #${script_dir}/repa -D multi_capture -O "${location}" &
 #${script_dir}/repa -D multi_capture &
 ${script_dir}/repa -O "${location}" &
-sr_pid=$!
+repa_pid=$!
 
 sleep 1
-kill -TERM ${sr_pid}
+kill -TERM ${repa_pid}
 
-wait ${sr_pid}
-sr_exit_code=$?
+wait ${repa_pid}
+repa_exit_code=$?
 
 rm -Rf "${location}"
 
-exit ${sr_exit_code}
+exit ${repa_exit_code}

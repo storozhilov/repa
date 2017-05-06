@@ -1,5 +1,5 @@
-#ifndef __SR__MULTITRACK_RECORDER_H
-#define __SR__MULTITRACK_RECORDER_H
+#ifndef __REPA__MULTITRACK_RECORDER_H
+#define __REPA__MULTITRACK_RECORDER_H
 
 #include <vector>
 #include <queue>
