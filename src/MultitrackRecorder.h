@@ -9,9 +9,6 @@
 #include <boost/thread/mutex.hpp>
 #include <boost/thread/condition_variable.hpp>
 
-#define ALSA_PCM_NEW_HW_PARAMS_API
-#include <alsa/asoundlib.h>
-
 class MultitrackRecorder
 {
 public:
@@ -30,6 +27,7 @@ private:
 	boost::thread _captureThread;
 	boost::thread _recordThread;
 
+	boost::atomic<unsigned int> _format;
 	boost::atomic<unsigned int> _rate;
 	boost::atomic<unsigned int> _bytesPerSample;
 	boost::atomic<unsigned int> _channels;
