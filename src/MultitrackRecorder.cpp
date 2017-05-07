@@ -3,14 +3,21 @@
 #include <stdexcept>
 #include <sstream>
 #include <iostream>
+#include <iomanip>
 #include <cmath>
 #include <fstream>
 #include <cstring>
+
+#define ALSA_PCM_NEW_HW_PARAMS_API
+#include <alsa/asoundlib.h>
+
+#include <sndfile.hh>
 
 MultitrackRecorder::MultitrackRecorder() :
 	_shouldRun(false),
 	_captureThread(),
 	_recordThread(),
+	_format(),
 	_rate(),
 	_bytesPerSample(),
 	_channels(),
@@ -144,6 +151,7 @@ void MultitrackRecorder::runCapture(const std::string& device)
 
 	snd_pcm_format_t format;
 	snd_pcm_hw_params_get_format(params, &format);
+	_format = static_cast<unsigned int>(format);
 	std::cout << "Format: " << snd_pcm_format_name(format) << ", " << snd_pcm_format_description(format) << std::endl;
 
 	snd_pcm_subformat_t subformat;
@@ -226,7 +234,7 @@ template <typename Word> std::ostream& write_word(std::ostream& outs, Word value
 
 void MultitrackRecorder::runRecord(const std::string& location)
 {
-	typedef std::vector<std::ofstream *> TargetFiles;
+	typedef std::vector<SndfileHandle *> TargetFiles;
 	TargetFiles targetFiles;
 
 	class FilesCleanup {
@@ -237,7 +245,6 @@ void MultitrackRecorder::runRecord(const std::string& location)
 
 		~FilesCleanup()
 		{
-			// Closing files
 			for (std::size_t i = 0U; i < _targetFiles.size(); ++i) {
 				delete _targetFiles[i];
 			}
@@ -252,6 +259,7 @@ void MultitrackRecorder::runRecord(const std::string& location)
 
 	std::size_t dataChunkPos = 0U;
 	bool streamDataInitialized = false;
+	snd_pcm_format_t format;
 	unsigned int rate;
 	unsigned int bytesPerSample;
 	unsigned int channels;
@@ -277,6 +285,7 @@ void MultitrackRecorder::runRecord(const std::string& location)
 		}
 
 		if (!streamDataInitialized) {
+			format = static_cast<snd_pcm_format_t>(_format.load());
 			rate = _rate;
 			bytesPerSample = _bytesPerSample;
 			channels = _channels;
@@ -289,28 +298,29 @@ void MultitrackRecorder::runRecord(const std::string& location)
 			targetFiles.resize(channels);
 			for (std::size_t i = 0U; i < channels; ++i) {
 				std::ostringstream filename;
-				filename << "track_" << i << ".wav";
+				filename << "track_" << std::setfill('0') << std::setw(2) << (i + 1) << ".wav";
 				std::cout << "Opening '" << filename.str() << "' file" << std::endl;
-				std::ofstream * targetFile = new std::ofstream(filename.str().c_str(),
-						std::ios_base::trunc | std::ios_base::binary);
 
-				// Writing header
-				*targetFile << "RIFF----WAVEfmt ";			// Chunk size to be filled in later
-				write_word(*targetFile, 16, 4);				// No extension data
-				write_word(*targetFile, 1, 2);				// 1 - PCM audio format
-				write_word(*targetFile, 1, 2);				// One channel (mono file)
-				write_word(*targetFile, rate, 4);			// Samples per second (Hz)
-				write_word(*targetFile, rate * bytesPerSample, 4);	// (Sample Rate * BitsPerSample * Channels) / 8
-				write_word(*targetFile, bytesPerSample, 2);		// (NumChannels * BitsPerSample) / 8
-				write_word(*targetFile, bytesPerSample * 8, 2);		// Number of bits per sample (use a multiple of 8)
+				int fileFormat = SF_FORMAT_WAV;
 
-				// Write the data chunk header
-				if (dataChunkPos == 0U) {
-					dataChunkPos = targetFile->tellp();
+				switch (format) {
+					case SND_PCM_FORMAT_S16_LE:
+						fileFormat |= SF_FORMAT_PCM_16;
+						break;
+					case SND_PCM_FORMAT_S32_LE:
+						fileFormat |= SF_FORMAT_PCM_32;
+						break;
+					case SND_PCM_FORMAT_FLOAT_LE:
+						fileFormat |= SF_FORMAT_FLOAT;
+						break;
+					default:
+						std::ostringstream msg;
+						msg << "WAV-file format is not supported: " << snd_pcm_format_name(format) <<
+							", " << snd_pcm_format_description(format);
+						throw std::runtime_error(msg.str());
 				}
-				*targetFile << "data----";		// Chunk size to be filled in later
-
-				targetFiles[i] = targetFile;
+				targetFiles[i] = new SndfileHandle(filename.str().c_str(), SFM_WRITE,
+						fileFormat, 1, rate);
 			}
 		}
 
@@ -329,27 +339,38 @@ void MultitrackRecorder::runRecord(const std::string& location)
 			captureQueue.pop();
 
 			for (std::size_t i = 0U; i < targetFiles.size(); ++i) {
-				targetFiles[i]->write(&recordBuffer[i * _periodSize * bytesPerSample], _periodSize * bytesPerSample);
+				sf_count_t itemsToWrite = 0;
+				sf_count_t itemsWritten = 0;
+
+				char * buf = &recordBuffer[i * _periodSize * bytesPerSample];
+				std::size_t size = _periodSize * bytesPerSample;
+
+				switch (format) {
+					case SND_PCM_FORMAT_S16_LE:
+						itemsToWrite = size / 2;
+						itemsWritten = targetFiles[i]->write(reinterpret_cast<short *>(buf), itemsToWrite);
+						break;
+					case SND_PCM_FORMAT_S32_LE:
+						itemsToWrite = size / 4;
+						itemsWritten = targetFiles[i]->write(reinterpret_cast<int *>(buf), itemsToWrite);
+						break;
+					case SND_PCM_FORMAT_FLOAT_LE:
+						itemsToWrite = size / 4;
+						itemsWritten = targetFiles[i]->write(reinterpret_cast<float *>(buf), itemsToWrite);
+						break;
+					default:
+						std::ostringstream msg;
+						msg << "WAV-file format is not supported: " << snd_pcm_format_name(format) <<
+							", " << snd_pcm_format_description(format);
+						throw std::runtime_error(msg.str());
+				}
+
+				if (itemsWritten != itemsToWrite) {
+					std::ostringstream msg;
+					msg << "Unconsistent written items count: " << itemsWritten << '/' << itemsToWrite;
+					throw std::runtime_error(msg.str());
+				}
 			}
-		}
-
-		// Updating headers
-		for (std::size_t i = 0U; i < targetFiles.size(); ++i) {
-			std::size_t fileLength = targetFiles[i]->tellp();
-
-			std::size_t chunkSize = fileLength - 8;
-			std::size_t subchunkSize = fileLength - dataChunkPos - 8;
-
-			// Fix the data chunk header to contain the data size
-			targetFiles[i]->seekp(dataChunkPos + 4);
-			write_word(*targetFiles[i], subchunkSize, 4);
-
-			// Fix the file header to contain the proper RIFF chunk size, which is (file size - 8) bytes
-			targetFiles[i]->seekp(4);
-			write_word(*targetFiles[i], chunkSize, 4);
-
-			// Moving back to EOF
-			targetFiles[i]->seekp(0, std::ios_base::end);
 		}
 	}
 }
