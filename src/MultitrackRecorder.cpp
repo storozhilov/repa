@@ -9,8 +9,6 @@
 #include <cstring>
 #include <boost/filesystem.hpp>
 
-#include <sndfile.hh>
-
 namespace
 {
 
@@ -19,10 +17,6 @@ public:
 	AlsaCleaner(snd_pcm_t * handle) :
 		_handle(handle)
 	{}
-
-	void release() {
-		_handle = 0;
-	}
 
 	~AlsaCleaner()
 	{
@@ -43,6 +37,10 @@ public:
 			throw std::runtime_error(msg.str());
 		}
 	}
+
+	void release() {
+		_handle = 0;
+	}
 private:
 	snd_pcm_t * _handle;
 };
@@ -56,12 +54,13 @@ MultitrackRecorder::MultitrackRecorder() :
 	_recordThread(),
 	_handle(),
 	_captureBuffer(),
+	_records(),
 	_format(),
 	_rate(),
 	_bytesPerSample(),
 	_channels(),
 	_periodSize(),
-	_periodBufferSize(0U),
+	_periodBufferSize(),
 	_captureQueue(),
 	_captureQueueCond(),
 	_captureQueueMutex()
@@ -147,7 +146,7 @@ void MultitrackRecorder::start(const std::string& location, const std::string& d
 
 	snd_pcm_format_t format;
 	snd_pcm_hw_params_get_format(params, &format);
-	_format = static_cast<unsigned int>(format);
+	_format.store(format);
 	std::cout << "Format: " << snd_pcm_format_name(format) << ", " << snd_pcm_format_description(format) << std::endl;
 
 	snd_pcm_subformat_t subformat;
@@ -156,12 +155,12 @@ void MultitrackRecorder::start(const std::string& location, const std::string& d
 
 	unsigned int rate;
 	snd_pcm_hw_params_get_rate(params, &rate, &dir);
-	_rate = rate;
-	std::cout << "Sample rate: " << _rate << " bps" << std::endl;
+	_rate.store(rate);
+	std::cout << "Sample rate: " << rate << " bps" << std::endl;
 
 	unsigned int channels;
 	snd_pcm_hw_params_get_channels(params, &channels);
-	_channels = channels;
+	_channels.store(channels);
 	std::cout << "Channels: " << channels << std::endl;
 
 	unsigned int periodTime;
@@ -170,14 +169,14 @@ void MultitrackRecorder::start(const std::string& location, const std::string& d
 
 	snd_pcm_uframes_t periodSize;
 	snd_pcm_hw_params_get_period_size(params, &periodSize, &dir);
-	_periodSize = periodSize;
+	_periodSize.store(periodSize);
 	std::cout << "Period size: " << periodSize << " frames" << std::endl;
 
 	unsigned int bufferTime;
 	snd_pcm_hw_params_get_buffer_time(params, &bufferTime, &dir);
 	std::cout << "Buffer time: " << bufferTime << " us" << std::endl;
 
-	// TODO: Correct sample bytes calculation
+	// TODO: Correct bytes per sample calculation
 	std::size_t bytesPerSample = 2;
 	if (format == SND_PCM_FORMAT_S32_LE) {
 		bytesPerSample = 4;
@@ -187,13 +186,48 @@ void MultitrackRecorder::start(const std::string& location, const std::string& d
 			snd_pcm_format_description(format) << ')';
 		throw std::runtime_error(msg.str());
 	}
-	_bytesPerSample = bytesPerSample;
-	std::cout << "Bytes per sample: " << _bytesPerSample << std::endl;
-	_periodBufferSize = _periodSize * _channels * bytesPerSample;
-	std::cout << "Allocating " << _periodBufferSize << " bytes capture buffer" << std::endl;
-	_captureBuffer.resize(_periodBufferSize);
+	_bytesPerSample.store(bytesPerSample);
+	std::cout << "Bytes per sample: " << bytesPerSample << std::endl;
 
+	std::size_t periodBufferSize = periodSize * channels * bytesPerSample;
+	_periodBufferSize.store(periodBufferSize);
+	std::cout << "Allocating " << periodBufferSize << " bytes capture buffer" << std::endl;
+	_captureBuffer.resize(periodBufferSize);
+
+	// Records initialization
+	RecordsCleaner recordsCleaner(_records);
+	for (std::size_t i = 1; i <= channels; ++i) {
+		std::ostringstream filename;
+		filename << "track_" << std::setfill('0') << std::setw(2) << i << ".wav";
+		boost::filesystem::path fullPath = boost::filesystem::path(location) /
+			boost::filesystem::path(filename.str());
+		std::cout << "Opening '" << fullPath.native() << "' file" << std::endl;
+
+		int fileFormat = SF_FORMAT_WAV;
+
+		switch (format) {
+			case SND_PCM_FORMAT_S16_LE:
+				fileFormat |= SF_FORMAT_PCM_16;
+				break;
+			case SND_PCM_FORMAT_S32_LE:
+				fileFormat |= SF_FORMAT_PCM_32;
+				break;
+			case SND_PCM_FORMAT_FLOAT_LE:
+				fileFormat |= SF_FORMAT_FLOAT;
+				break;
+			default:
+				std::ostringstream msg;
+				msg << "WAV-file format is not supported: " << snd_pcm_format_name(format) <<
+					", " << snd_pcm_format_description(format);
+				throw std::runtime_error(msg.str());
+		}
+		_records.insert(Records::value_type(i, new SndfileHandle(fullPath.c_str(),
+						SFM_WRITE, fileFormat, 1, rate)));
+	}
+
+	// Everything is fine - releasing cleaners
 	alsaCleaner.release();
+	recordsCleaner.release();
 
 	// Starting capture & record threads
 	_shouldRun = true;
@@ -241,35 +275,15 @@ void MultitrackRecorder::runCapture()
 
 void MultitrackRecorder::runRecord(const std::string& location)
 {
-	typedef std::vector<SndfileHandle *> TargetFiles;
-	TargetFiles targetFiles;
+	RecordsCleaner recordsCleaner(_records);
 
-	class FilesCleanup {
-	public:
-		FilesCleanup(TargetFiles& targetFiles) :
-			_targetFiles(targetFiles)
-		{}
+	snd_pcm_format_t format = _format.load();
+	unsigned int bytesPerSample = _bytesPerSample.load();
+	unsigned int channels = _channels.load();
+	unsigned int periodSize = _periodSize.load();
+	unsigned int periodBufferSize = _periodBufferSize.load();
 
-		~FilesCleanup()
-		{
-			for (std::size_t i = 0U; i < _targetFiles.size(); ++i) {
-				delete _targetFiles[i];
-			}
-			_targetFiles.clear();
-		}
-
-	private:
-		TargetFiles& _targetFiles;
-	} cleanup(targetFiles);
-
-	CaptureBuffer recordBuffer;
-
-	std::size_t dataChunkPos = 0U;
-	bool streamDataInitialized = false;
-	snd_pcm_format_t format;
-	unsigned int rate;
-	unsigned int bytesPerSample;
-	unsigned int channels;
+	CaptureBuffer recordBuffer(periodBufferSize);
 
 	while (_shouldRun) {
 		boost::unique_lock<boost::mutex> lock(_captureQueueMutex);
@@ -291,53 +305,10 @@ void MultitrackRecorder::runRecord(const std::string& location)
 			std::cout << '+';
 		}
 
-		if (!streamDataInitialized) {
-			format = static_cast<snd_pcm_format_t>(_format.load());
-			rate = _rate;
-			bytesPerSample = _bytesPerSample;
-			channels = _channels;
-			streamDataInitialized = true;
-		}
-
-		if (targetFiles.empty()) {
-			recordBuffer.resize(_periodBufferSize);
-
-			targetFiles.resize(channels);
-			for (std::size_t i = 0U; i < channels; ++i) {
-				std::ostringstream filename;
-				filename << "track_" << std::setfill('0') << std::setw(2) << (i + 1) << ".wav";
-				boost::filesystem::path fullPath = boost::filesystem::path(location) /
-					boost::filesystem::path(filename.str());
-				std::cout << "Opening '" << fullPath.native() << "' file" << std::endl;
-
-				int fileFormat = SF_FORMAT_WAV;
-
-				switch (format) {
-					case SND_PCM_FORMAT_S16_LE:
-						fileFormat |= SF_FORMAT_PCM_16;
-						break;
-					case SND_PCM_FORMAT_S32_LE:
-						fileFormat |= SF_FORMAT_PCM_32;
-						break;
-					case SND_PCM_FORMAT_FLOAT_LE:
-						fileFormat |= SF_FORMAT_FLOAT;
-						break;
-					default:
-						std::ostringstream msg;
-						msg << "WAV-file format is not supported: " << snd_pcm_format_name(format) <<
-							", " << snd_pcm_format_description(format);
-						throw std::runtime_error(msg.str());
-				}
-				targetFiles[i] = new SndfileHandle(fullPath.c_str(), SFM_WRITE,
-						fileFormat, 1, rate);
-			}
-		}
-
-		// Writing data to files
 		while (!captureQueue.empty()) {
 			CaptureBuffer captureBuffer = captureQueue.front();
 
-			for (std::size_t i = 0; i < _periodBufferSize; i += bytesPerSample) {
+			for (std::size_t i = 0; i < periodBufferSize; i += bytesPerSample) {
 				std::size_t frame = i / bytesPerSample / channels;
 				std::size_t channel = i / bytesPerSample % channels;
 				std::size_t j = channel * _periodSize * bytesPerSample + frame * bytesPerSample;
@@ -347,7 +318,7 @@ void MultitrackRecorder::runRecord(const std::string& location)
 
 			captureQueue.pop();
 
-			for (std::size_t i = 0U; i < targetFiles.size(); ++i) {
+			for (std::size_t i = 0U; i < channels; ++i) {
 				sf_count_t itemsToWrite = 0;
 				sf_count_t itemsWritten = 0;
 
@@ -357,15 +328,15 @@ void MultitrackRecorder::runRecord(const std::string& location)
 				switch (format) {
 					case SND_PCM_FORMAT_S16_LE:
 						itemsToWrite = size / 2;
-						itemsWritten = targetFiles[i]->write(reinterpret_cast<short *>(buf), itemsToWrite);
+						itemsWritten = _records[i + 1]->write(reinterpret_cast<short *>(buf), itemsToWrite);
 						break;
 					case SND_PCM_FORMAT_S32_LE:
 						itemsToWrite = size / 4;
-						itemsWritten = targetFiles[i]->write(reinterpret_cast<int *>(buf), itemsToWrite);
+						itemsWritten = _records[i + 1]->write(reinterpret_cast<int *>(buf), itemsToWrite);
 						break;
 					case SND_PCM_FORMAT_FLOAT_LE:
 						itemsToWrite = size / 4;
-						itemsWritten = targetFiles[i]->write(reinterpret_cast<float *>(buf), itemsToWrite);
+						itemsWritten = _records[i + 1]->write(reinterpret_cast<float *>(buf), itemsToWrite);
 						break;
 					default:
 						std::ostringstream msg;

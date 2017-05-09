@@ -4,8 +4,11 @@
 #define ALSA_PCM_NEW_HW_PARAMS_API
 #include <alsa/asoundlib.h>
 
+#include <sndfile.hh>
+
 #include <vector>
 #include <queue>
+#include <map>
 
 #include <boost/atomic.hpp>
 #include <boost/thread.hpp>
@@ -22,6 +25,32 @@ public:
 private:
 	typedef std::vector<char> CaptureBuffer;
 	typedef std::queue<CaptureBuffer> CaptureQueue;
+	typedef std::map<std::size_t, SndfileHandle *> Records;
+
+	class RecordsCleaner {
+	public:
+		RecordsCleaner(Records& records) :
+			_records(&records)
+		{}
+
+		~RecordsCleaner()
+		{
+			if (_records == 0) {
+				return;
+			}
+
+			for (MultitrackRecorder::Records::iterator i = _records->begin(); i != _records->end(); ++i) {
+				delete (*i).second;
+			}
+			_records->clear();
+		}
+
+		void release() {
+			_records = 0;
+		}
+	private:
+		Records * _records;
+	};
 
 	void runCapture();
 	void runRecord(const std::string& location);
@@ -33,7 +62,9 @@ private:
 	snd_pcm_t * _handle;
 	CaptureBuffer _captureBuffer;
 
-	boost::atomic<unsigned int> _format;
+	Records _records;
+
+	boost::atomic<snd_pcm_format_t> _format;
 	boost::atomic<unsigned int> _rate;
 	boost::atomic<unsigned int> _bytesPerSample;
 	boost::atomic<unsigned int> _channels;
