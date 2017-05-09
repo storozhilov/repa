@@ -9,15 +9,53 @@
 #include <cstring>
 #include <boost/filesystem.hpp>
 
-#define ALSA_PCM_NEW_HW_PARAMS_API
-#include <alsa/asoundlib.h>
-
 #include <sndfile.hh>
+
+namespace
+{
+
+class AlsaCleaner {
+public:
+	AlsaCleaner(snd_pcm_t * handle) :
+		_handle(handle)
+	{}
+
+	void release() {
+		_handle = 0;
+	}
+
+	~AlsaCleaner()
+	{
+		if (_handle == 0) {
+			return;
+		}
+
+		int rc = snd_pcm_drain(_handle);
+		if (rc < 0) {
+			std::ostringstream msg;
+			msg << "Stopping PCM device error: " << snd_strerror(rc);
+			throw std::runtime_error(msg.str());
+		}
+		rc = snd_pcm_close(_handle);
+		if (rc < 0) {
+			std::ostringstream msg;
+			msg << "Closing PCM device error: " << snd_strerror(rc);
+			throw std::runtime_error(msg.str());
+		}
+	}
+private:
+	snd_pcm_t * _handle;
+};
+
+}
+
 
 MultitrackRecorder::MultitrackRecorder() :
 	_shouldRun(false),
 	_captureThread(),
 	_recordThread(),
+	_handle(),
+	_captureBuffer(),
 	_format(),
 	_rate(),
 	_bytesPerSample(),
@@ -57,70 +95,27 @@ MultitrackRecorder::MultitrackRecorder() :
 
 void MultitrackRecorder::start(const std::string& location, const std::string& device)
 {
-	_shouldRun = true;
-	_captureThread = boost::thread(boost::bind(&MultitrackRecorder::runCapture, this, device));
-	_recordThread = boost::thread(boost::bind(&MultitrackRecorder::runRecord, this, location));
-}
-
-void MultitrackRecorder::stop()
-{
-	_shouldRun = false;
-
-	boost::unique_lock<boost::mutex> lock(_captureQueueMutex);
-	_captureQueueCond.notify_all();
-	lock.unlock();
-
-	_captureThread.join();
-	_recordThread.join();
-}
-
-void MultitrackRecorder::runCapture(const std::string& device)
-{
-	snd_pcm_t * handle;
-	int rc = snd_pcm_open(&handle, device.c_str(), SND_PCM_STREAM_CAPTURE, 0);
+	// ALSA intialization
+	int rc = snd_pcm_open(&_handle, device.c_str(), SND_PCM_STREAM_CAPTURE, 0);
 	if (rc < 0) {
 		std::ostringstream msg;
 		msg << "Opening PCM device error: " << snd_strerror(rc);
 		throw std::runtime_error(msg.str());
 	}
-
-	class AlsaCleanup {
-	public:
-		AlsaCleanup(snd_pcm_t * handle) :
-			_handle(handle)
-		{}
-
-		~AlsaCleanup()
-		{
-			int rc = snd_pcm_drain(_handle);
-			if (rc < 0) {
-				std::ostringstream msg;
-				msg << "Stopping PCM device error: " << snd_strerror(rc);
-				throw std::runtime_error(msg.str());
-			}
-			rc = snd_pcm_close(_handle);
-			if (rc < 0) {
-				std::ostringstream msg;
-				msg << "Closing PCM device error: " << snd_strerror(rc);
-				throw std::runtime_error(msg.str());
-			}
-		}
-	private:
-		snd_pcm_t * _handle;
-	} alsaCleanup(handle);
+	AlsaCleaner alsaCleaner(_handle);
 
 	snd_pcm_hw_params_t * params;
 	snd_pcm_hw_params_alloca(&params);
-	snd_pcm_hw_params_any(handle, params);
+	snd_pcm_hw_params_any(_handle, params);
 
-	rc = snd_pcm_hw_params_set_access(handle, params, SND_PCM_ACCESS_RW_INTERLEAVED);
+	rc = snd_pcm_hw_params_set_access(_handle, params, SND_PCM_ACCESS_RW_INTERLEAVED);
 	if (rc < 0) {
 		std::ostringstream msg;
 		msg << "Restricting access type error: " << snd_strerror(rc);
 		throw std::runtime_error(msg.str());
 	}
 
-	rc = snd_pcm_hw_params_set_format(handle, params, SND_PCM_FORMAT_S16_LE);
+	rc = snd_pcm_hw_params_set_format(_handle, params, SND_PCM_FORMAT_S16_LE);
 	if (rc < 0) {
 		std::cerr << "WARNING: Requesting format error: " << snd_strerror(rc) <<std::endl;
 	}
@@ -129,22 +124,22 @@ void MultitrackRecorder::runCapture(const std::string& device)
 	int dir;
 
 	val = 44100;
-	rc = snd_pcm_hw_params_set_rate_near(handle, params, &val, &dir);
+	rc = snd_pcm_hw_params_set_rate_near(_handle, params, &val, &dir);
 	if (rc < 0) {
 		std::ostringstream msg;
 		msg << "Restricting sample rate error: " << snd_strerror(rc);
 		throw std::runtime_error(msg.str());
 	}
 
-	rc = snd_pcm_hw_params(handle, params);
+	rc = snd_pcm_hw_params(_handle, params);
 	if (rc < 0) {
 		std::ostringstream msg;
 		msg << "Setting H/W parameters error: " << snd_strerror(rc);
 		throw std::runtime_error(msg.str());
 	}
 
-	std::cout << "PCM handle name: " << snd_pcm_name(handle) << std::endl <<
-		"PCM state: " << snd_pcm_state_name(snd_pcm_state(handle)) << std::endl;
+	std::cout << "PCM handle name: " << snd_pcm_name(_handle) << std::endl <<
+		"PCM state: " << snd_pcm_state_name(snd_pcm_state(_handle)) << std::endl;
 
 	snd_pcm_access_t access;
 	snd_pcm_hw_params_get_access(params, &access);
@@ -196,41 +191,52 @@ void MultitrackRecorder::runCapture(const std::string& device)
 	std::cout << "Bytes per sample: " << _bytesPerSample << std::endl;
 	_periodBufferSize = _periodSize * _channels * bytesPerSample;
 	std::cout << "Allocating " << _periodBufferSize << " bytes capture buffer" << std::endl;
-	CaptureBuffer captureBuffer(_periodBufferSize);
-	// TODO: Other params
+	_captureBuffer.resize(_periodBufferSize);
+
+	alsaCleaner.release();
+
+	// Starting capture & record threads
+	_shouldRun = true;
+	_captureThread = boost::thread(boost::bind(&MultitrackRecorder::runCapture, this));
+	_recordThread = boost::thread(boost::bind(&MultitrackRecorder::runRecord, this, location));
+}
+
+void MultitrackRecorder::stop()
+{
+	_shouldRun = false;
+
+	boost::unique_lock<boost::mutex> lock(_captureQueueMutex);
+	_captureQueueCond.notify_all();
+	lock.unlock();
+
+	_captureThread.join();
+	_recordThread.join();
+}
+
+void MultitrackRecorder::runCapture()
+{
+	AlsaCleaner alsaCleaner(_handle);
+	std::size_t periodSize = _periodSize.load();
 
 	while (_shouldRun) {
-		int rc = snd_pcm_readi(handle, &captureBuffer[0], _periodSize);
+		int rc = snd_pcm_readi(_handle, &_captureBuffer[0], periodSize);
 		if (rc == -EPIPE) {
 			/* EPIPE means overrun */
 			std::cerr << "ERROR: Overrun occurred" << std::endl;
-			snd_pcm_prepare(handle);
+			snd_pcm_prepare(_handle);
 			continue;
 		} else if (rc < 0) {
 			std::cerr << "ERROR: Reading data error: " << snd_strerror(rc) << std::endl;
 			return;
-		} else if (rc != _periodSize) {
+		} else if (rc != periodSize) {
 			// TODO: Special handling
-			std::cerr << "WARNING: Short read, read " << rc << "/" << _periodSize << " frames" << std::endl;
+			std::cerr << "WARNING: Short read: " << rc << "/" << periodSize << " frames" << std::endl;
 		}
 		std::cout << '.';
 		boost::unique_lock<boost::mutex> lock(_captureQueueMutex);
-		_captureQueue.push(captureBuffer);
+		_captureQueue.push(_captureBuffer);
 		_captureQueueCond.notify_all();
 	}
-}
-
-namespace
-{
-
-template <typename Word> std::ostream& write_word(std::ostream& outs, Word value, std::size_t size = sizeof(Word))
-{
-	for (; size; --size, value >>= 8) {
-		outs.put(static_cast<char>(value & 0xFF));
-	}
-	return outs;
-}
-
 }
 
 void MultitrackRecorder::runRecord(const std::string& location)
