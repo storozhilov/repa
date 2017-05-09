@@ -13,10 +13,9 @@ set -x
 
 ${script_dir}/repa --help
 
-location=$(mktemp -d)
+location="${script_dir}/wav"
+mkdir -p "${location}"
 
-#${script_dir}/repa -D multi_capture -O "${location}" &
-#${script_dir}/repa -D multi_capture &
 ${script_dir}/repa -O "${location}" &
 repa_pid=$!
 
@@ -26,6 +25,6 @@ kill -TERM ${repa_pid}
 wait ${repa_pid}
 repa_exit_code=$?
 
-rm -Rf "${location}"
+#rm -Rf "${location}"
 
 exit ${repa_exit_code}

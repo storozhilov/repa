@@ -7,6 +7,7 @@
 #include <cmath>
 #include <fstream>
 #include <cstring>
+#include <boost/filesystem.hpp>
 
 #define ALSA_PCM_NEW_HW_PARAMS_API
 #include <alsa/asoundlib.h>
@@ -299,7 +300,9 @@ void MultitrackRecorder::runRecord(const std::string& location)
 			for (std::size_t i = 0U; i < channels; ++i) {
 				std::ostringstream filename;
 				filename << "track_" << std::setfill('0') << std::setw(2) << (i + 1) << ".wav";
-				std::cout << "Opening '" << filename.str() << "' file" << std::endl;
+				boost::filesystem::path fullPath = boost::filesystem::path(location) /
+					boost::filesystem::path(filename.str());
+				std::cout << "Opening '" << fullPath.native() << "' file" << std::endl;
 
 				int fileFormat = SF_FORMAT_WAV;
 
@@ -319,7 +322,7 @@ void MultitrackRecorder::runRecord(const std::string& location)
 							", " << snd_pcm_format_description(format);
 						throw std::runtime_error(msg.str());
 				}
-				targetFiles[i] = new SndfileHandle(filename.str().c_str(), SFM_WRITE,
+				targetFiles[i] = new SndfileHandle(fullPath.c_str(), SFM_WRITE,
 						fileFormat, 1, rate);
 			}
 		}
