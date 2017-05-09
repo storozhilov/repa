@@ -53,7 +53,6 @@ MultitrackRecorder::MultitrackRecorder() :
 	_captureThread(),
 	_recordThread(),
 	_handle(),
-	_captureBuffer(),
 	_records(),
 	_format(),
 	_rate(),
@@ -191,8 +190,6 @@ void MultitrackRecorder::start(const std::string& location, const std::string& d
 
 	std::size_t periodBufferSize = periodSize * channels * bytesPerSample;
 	_periodBufferSize.store(periodBufferSize);
-	std::cout << "Allocating " << periodBufferSize << " bytes capture buffer" << std::endl;
-	_captureBuffer.resize(periodBufferSize);
 
 	// Records initialization
 	RecordsCleaner recordsCleaner(_records);
@@ -251,9 +248,12 @@ void MultitrackRecorder::runCapture()
 {
 	AlsaCleaner alsaCleaner(_handle);
 	std::size_t periodSize = _periodSize.load();
+	std::size_t periodBufferSize = _periodBufferSize.load();
+
+	CaptureBuffer captureBuffer(periodBufferSize);
 
 	while (_shouldRun) {
-		int rc = snd_pcm_readi(_handle, &_captureBuffer[0], periodSize);
+		int rc = snd_pcm_readi(_handle, &captureBuffer[0], periodSize);
 		if (rc == -EPIPE) {
 			/* EPIPE means overrun */
 			std::cerr << "ERROR: Overrun occurred" << std::endl;
@@ -268,7 +268,7 @@ void MultitrackRecorder::runCapture()
 		}
 		std::cout << '.';
 		boost::unique_lock<boost::mutex> lock(_captureQueueMutex);
-		_captureQueue.push(_captureBuffer);
+		_captureQueue.push(captureBuffer);
 		_captureQueueCond.notify_all();
 	}
 }

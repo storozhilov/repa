@@ -60,7 +60,6 @@ private:
 	boost::thread _recordThread;
 
 	snd_pcm_t * _handle;
-	CaptureBuffer _captureBuffer;
 
 	Records _records;
 
