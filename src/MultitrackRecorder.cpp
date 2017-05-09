@@ -49,7 +49,7 @@ private:
 
 
 MultitrackRecorder::MultitrackRecorder() :
-	_shouldRun(false),
+	_shouldRun(),
 	_captureThread(),
 	_recordThread(),
 	_handle(),
@@ -227,14 +227,14 @@ void MultitrackRecorder::start(const std::string& location, const std::string& d
 	recordsCleaner.release();
 
 	// Starting capture & record threads
-	_shouldRun = true;
+	_shouldRun.store(true);
 	_captureThread = boost::thread(boost::bind(&MultitrackRecorder::runCapture, this));
 	_recordThread = boost::thread(boost::bind(&MultitrackRecorder::runRecord, this, location));
 }
 
 void MultitrackRecorder::stop()
 {
-	_shouldRun = false;
+	_shouldRun.store(false);
 
 	boost::unique_lock<boost::mutex> lock(_captureQueueMutex);
 	_captureQueueCond.notify_all();
@@ -252,7 +252,7 @@ void MultitrackRecorder::runCapture()
 
 	CaptureBuffer captureBuffer(periodBufferSize);
 
-	while (_shouldRun) {
+	while (_shouldRun.load()) {
 		int rc = snd_pcm_readi(_handle, &captureBuffer[0], periodSize);
 		if (rc == -EPIPE) {
 			/* EPIPE means overrun */
@@ -285,11 +285,11 @@ void MultitrackRecorder::runRecord(const std::string& location)
 
 	CaptureBuffer recordBuffer(periodBufferSize);
 
-	while (_shouldRun) {
+	while (_shouldRun.load()) {
 		boost::unique_lock<boost::mutex> lock(_captureQueueMutex);
 		while (_captureQueue.empty()) {
 			_captureQueueCond.wait(lock);
-			if (!_shouldRun) {
+			if (!_shouldRun.load()) {
 				break;
 			}
 		}
