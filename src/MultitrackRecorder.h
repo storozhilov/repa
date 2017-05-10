@@ -23,8 +23,8 @@ public:
 	void start(const std::string& location, const std::string& device);
 	void stop();
 private:
-	typedef std::vector<char> CaptureBuffer;
-	typedef std::queue<CaptureBuffer> CaptureQueue;
+	typedef std::vector<char> Buffer;
+	typedef std::queue<Buffer> CaptureQueue;
 	typedef std::map<std::size_t, SndfileHandle *> Records;
 
 	class RecordsCleaner {
@@ -53,7 +53,7 @@ private:
 	};
 
 	void runCapture();
-	void runRecord(const std::string& location);
+	void runRecord();
 
 	boost::atomic<bool> _shouldRun;
 	boost::thread _captureThread;
@@ -70,9 +70,16 @@ private:
 	boost::atomic<unsigned int> _periodSize;
 	boost::atomic<std::size_t> _periodBufferSize;
 
+	Buffer _captureRingBuffer;
+	Buffer _recordBuffer;
+
 	CaptureQueue _captureQueue;
 	boost::condition_variable _captureQueueCond;
 	boost::mutex _captureQueueMutex;
+	std::size_t _captureOffset;
+	std::size_t _ringsCaptured;
+	std::size_t _recordOffset;
+	std::size_t _ringsRecorded;
 };
 
 #endif

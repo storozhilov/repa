@@ -12,6 +12,9 @@
 namespace
 {
 
+//std::size_t const PeriodsInBuffer = 1024U;
+std::size_t const PeriodsInBuffer = 8U;
+
 class AlsaCleaner {
 public:
 	AlsaCleaner(snd_pcm_t * handle) :
@@ -60,9 +63,15 @@ MultitrackRecorder::MultitrackRecorder() :
 	_channels(),
 	_periodSize(),
 	_periodBufferSize(),
+	_captureRingBuffer(),
+	_recordBuffer(),
 	_captureQueue(),
 	_captureQueueCond(),
-	_captureQueueMutex()
+	_captureQueueMutex(),
+	_captureOffset(),
+	_ringsCaptured(),
+	_recordOffset(),
+	_ringsRecorded()
 {
 	std::cout << "ALSA library version: " << SND_LIB_VERSION_STR << std::endl;
 	std::cout << "PCM stream types:" << std::endl;
@@ -190,6 +199,19 @@ void MultitrackRecorder::start(const std::string& location, const std::string& d
 
 	std::size_t periodBufferSize = periodSize * channels * bytesPerSample;
 	_periodBufferSize.store(periodBufferSize);
+	std::cout << "Period buffer size: " << periodBufferSize << std::endl;
+
+	std::size_t bufferSize = periodBufferSize * PeriodsInBuffer;
+	std::cout << "Allocating " << (bufferSize / 1024U) << " KB capture ring buffer for " << PeriodsInBuffer <<
+		" periods (~" << (periodTime * PeriodsInBuffer / 1000000.0) << " sec)" << std::endl;
+	_captureRingBuffer.resize(bufferSize);
+	std::cout << "Allocating " << (bufferSize / 1024U) << " KB record buffer" << std::endl;
+	_recordBuffer.resize(bufferSize);
+
+	_captureOffset = 0U;
+	_ringsCaptured = 0U;
+	_recordOffset = 0U;
+	_ringsRecorded = 0U;
 
 	// Records initialization
 	RecordsCleaner recordsCleaner(_records);
@@ -229,7 +251,7 @@ void MultitrackRecorder::start(const std::string& location, const std::string& d
 	// Starting capture & record threads
 	_shouldRun.store(true);
 	_captureThread = boost::thread(boost::bind(&MultitrackRecorder::runCapture, this));
-	_recordThread = boost::thread(boost::bind(&MultitrackRecorder::runRecord, this, location));
+	_recordThread = boost::thread(boost::bind(&MultitrackRecorder::runRecord, this));
 }
 
 void MultitrackRecorder::stop()
@@ -242,6 +264,9 @@ void MultitrackRecorder::stop()
 
 	_captureThread.join();
 	_recordThread.join();
+
+	Buffer().swap(_captureRingBuffer);
+	Buffer().swap(_recordBuffer);
 }
 
 void MultitrackRecorder::runCapture()
@@ -250,30 +275,65 @@ void MultitrackRecorder::runCapture()
 	std::size_t periodSize = _periodSize.load();
 	std::size_t periodBufferSize = _periodBufferSize.load();
 
-	CaptureBuffer captureBuffer(periodBufferSize);
+	Buffer captureBuffer(periodBufferSize);
+
+	std::size_t captureOffset = 0U;
+	std::size_t ringsCaptured = 0U;
+	std::size_t recordOffset = 0U;
+	std::size_t ringsRecorded = 0U;
 
 	while (_shouldRun.load()) {
+		std::size_t captureRingBufferOffset = captureOffset * periodBufferSize;
+
+		std::size_t absoluteCaptureOffset = ringsCaptured * PeriodsInBuffer + captureOffset;
+		std::size_t absoluteRecordOffset = ringsRecorded * PeriodsInBuffer + recordOffset;
+
+		//std::cout << "captureRingBufferOffset: " << captureRingBufferOffset << ", absoluteCaptureOffset: " <<
+		//	absoluteCaptureOffset << ", absoluteRecordOffset: " << absoluteRecordOffset << std::endl;
+
+		if (absoluteCaptureOffset >= (absoluteRecordOffset + PeriodsInBuffer)) {
+			// TODO: Handle that properly
+			std::cerr << "ERROR: Overrun occurred" << std::endl;
+			throw std::runtime_error("ERROR: Overrun occurred");
+		}
+
 		int rc = snd_pcm_readi(_handle, &captureBuffer[0], periodSize);
 		if (rc == -EPIPE) {
 			/* EPIPE means overrun */
-			std::cerr << "ERROR: Overrun occurred" << std::endl;
+			std::cerr << "ERROR: ALSA overrun occurred" << std::endl;
 			snd_pcm_prepare(_handle);
 			continue;
 		} else if (rc < 0) {
-			std::cerr << "ERROR: Reading data error: " << snd_strerror(rc) << std::endl;
+			std::cerr << "ERROR: ALSA reading data error: " << snd_strerror(rc) << std::endl;
 			return;
 		} else if (rc != periodSize) {
 			// TODO: Special handling
-			std::cerr << "WARNING: Short read: " << rc << "/" << periodSize << " frames" << std::endl;
+			std::cerr << "WARNING: ALSA short read: " << rc << "/" << periodSize << " frames" << std::endl;
 		}
 		std::cout << '.';
+
+		captureOffset = (captureOffset + 1) % PeriodsInBuffer;
+		if (captureOffset == 0U) {
+			++ringsCaptured;
+		}
+
+		//std::cout << "captureOffset: " << captureOffset << ", ringsCaptured: " << ringsCaptured <<
+		//	", recordOffset: " << recordOffset << ", ringsRecorded: " << ringsRecorded << std::endl;
+
 		boost::unique_lock<boost::mutex> lock(_captureQueueMutex);
 		_captureQueue.push(captureBuffer);
+
+		_captureOffset = captureOffset;
+		_ringsCaptured = ringsCaptured;
+
+		recordOffset = _recordOffset;
+		ringsRecorded = _ringsRecorded;
+
 		_captureQueueCond.notify_all();
 	}
 }
 
-void MultitrackRecorder::runRecord(const std::string& location)
+void MultitrackRecorder::runRecord()
 {
 	RecordsCleaner recordsCleaner(_records);
 
@@ -283,7 +343,7 @@ void MultitrackRecorder::runRecord(const std::string& location)
 	unsigned int periodSize = _periodSize.load();
 	unsigned int periodBufferSize = _periodBufferSize.load();
 
-	CaptureBuffer recordBuffer(periodBufferSize);
+	Buffer recordBuffer(periodBufferSize);
 
 	while (_shouldRun.load()) {
 		boost::unique_lock<boost::mutex> lock(_captureQueueMutex);
@@ -306,7 +366,7 @@ void MultitrackRecorder::runRecord(const std::string& location)
 		}
 
 		while (!captureQueue.empty()) {
-			CaptureBuffer captureBuffer = captureQueue.front();
+			Buffer captureBuffer = captureQueue.front();
 
 			for (std::size_t i = 0; i < periodBufferSize; i += bytesPerSample) {
 				std::size_t frame = i / bytesPerSample / channels;
