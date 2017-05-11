@@ -12,6 +12,9 @@
 namespace
 {
 
+// TODO: Make it configurable
+std::size_t const PeriodsInBuffer = 1024U;
+
 class AlsaCleaner {
 public:
 	AlsaCleaner(snd_pcm_t * handle) :
@@ -60,9 +63,13 @@ MultitrackRecorder::MultitrackRecorder() :
 	_channels(),
 	_periodSize(),
 	_periodBufferSize(),
-	_captureQueue(),
-	_captureQueueCond(),
-	_captureQueueMutex()
+	_captureRingBuffer(),
+	_captureCond(),
+	_captureMutex(),
+	_captureOffset(),
+	_ringsCaptured(),
+	_recordOffset(),
+	_ringsRecorded()
 {
 	std::cout << "ALSA library version: " << SND_LIB_VERSION_STR << std::endl;
 	std::cout << "PCM stream types:" << std::endl;
@@ -190,6 +197,17 @@ void MultitrackRecorder::start(const std::string& location, const std::string& d
 
 	std::size_t periodBufferSize = periodSize * channels * bytesPerSample;
 	_periodBufferSize.store(periodBufferSize);
+	std::cout << "Period buffer size: " << periodBufferSize << std::endl;
+
+	std::size_t bufferSize = periodBufferSize * PeriodsInBuffer;
+	std::cout << "Allocating " << (bufferSize / 1024U) << " KB capture ring buffer for " << PeriodsInBuffer <<
+		" periods (~" << (periodTime * PeriodsInBuffer / 1000000.0) << " sec)" << std::endl;
+	_captureRingBuffer.resize(bufferSize);
+
+	_captureOffset = 0U;
+	_ringsCaptured = 0U;
+	_recordOffset = 0U;
+	_ringsRecorded = 0U;
 
 	// Records initialization
 	RecordsCleaner recordsCleaner(_records);
@@ -229,51 +247,77 @@ void MultitrackRecorder::start(const std::string& location, const std::string& d
 	// Starting capture & record threads
 	_shouldRun.store(true);
 	_captureThread = boost::thread(boost::bind(&MultitrackRecorder::runCapture, this));
-	_recordThread = boost::thread(boost::bind(&MultitrackRecorder::runRecord, this, location));
+	_recordThread = boost::thread(boost::bind(&MultitrackRecorder::runRecord, this));
 }
 
 void MultitrackRecorder::stop()
 {
 	_shouldRun.store(false);
 
-	boost::unique_lock<boost::mutex> lock(_captureQueueMutex);
-	_captureQueueCond.notify_all();
+	boost::unique_lock<boost::mutex> lock(_captureMutex);
+	_captureCond.notify_all();
 	lock.unlock();
 
 	_captureThread.join();
 	_recordThread.join();
+
+	Buffer().swap(_captureRingBuffer);	// Capture ring buffer disposal
 }
 
 void MultitrackRecorder::runCapture()
 {
 	AlsaCleaner alsaCleaner(_handle);
+
 	std::size_t periodSize = _periodSize.load();
 	std::size_t periodBufferSize = _periodBufferSize.load();
 
-	CaptureBuffer captureBuffer(periodBufferSize);
+	std::size_t captureOffset = 0U;
+	std::size_t ringsCaptured = 0U;
+	std::size_t recordOffset = 0U;
+	std::size_t ringsRecorded = 0U;
 
 	while (_shouldRun.load()) {
-		int rc = snd_pcm_readi(_handle, &captureBuffer[0], periodSize);
+		std::size_t captureRingBufferOffset = captureOffset * periodBufferSize;
+
+		std::size_t absoluteCaptureOffset = ringsCaptured * PeriodsInBuffer + captureOffset;
+		std::size_t absoluteRecordOffset = ringsRecorded * PeriodsInBuffer + recordOffset;
+
+		if (absoluteCaptureOffset >= (absoluteRecordOffset + PeriodsInBuffer)) {
+			// TODO: Handle that properly
+			std::cerr << "ERROR: Overrun occurred" << std::endl;
+			throw std::runtime_error("ERROR: Overrun occurred");
+		}
+
+		int rc = snd_pcm_readi(_handle, &_captureRingBuffer[captureRingBufferOffset], periodSize);
 		if (rc == -EPIPE) {
 			/* EPIPE means overrun */
-			std::cerr << "ERROR: Overrun occurred" << std::endl;
+			std::cerr << "ERROR: ALSA overrun occurred" << std::endl;
 			snd_pcm_prepare(_handle);
 			continue;
 		} else if (rc < 0) {
-			std::cerr << "ERROR: Reading data error: " << snd_strerror(rc) << std::endl;
+			std::cerr << "ERROR: ALSA reading data error: " << snd_strerror(rc) << std::endl;
 			return;
 		} else if (rc != periodSize) {
 			// TODO: Special handling
-			std::cerr << "WARNING: Short read: " << rc << "/" << periodSize << " frames" << std::endl;
+			std::cerr << "WARNING: ALSA short read: " << rc << "/" << periodSize << " frames" << std::endl;
 		}
 		std::cout << '.';
-		boost::unique_lock<boost::mutex> lock(_captureQueueMutex);
-		_captureQueue.push(captureBuffer);
-		_captureQueueCond.notify_all();
+
+		captureOffset = (captureOffset + 1) % PeriodsInBuffer;
+		if (captureOffset == 0U) {
+			++ringsCaptured;
+		}
+
+		boost::unique_lock<boost::mutex> lock(_captureMutex);
+		_captureOffset = captureOffset;
+		_ringsCaptured = ringsCaptured;
+		recordOffset = _recordOffset;
+		ringsRecorded = _ringsRecorded;
+		_captureCond.notify_all();
 	}
 }
 
-void MultitrackRecorder::runRecord(const std::string& location)
+void MultitrackRecorder::runRecord()
 {
 	RecordsCleaner recordsCleaner(_records);
 
@@ -283,41 +327,47 @@ void MultitrackRecorder::runRecord(const std::string& location)
 	unsigned int periodSize = _periodSize.load();
 	unsigned int periodBufferSize = _periodBufferSize.load();
 
-	CaptureBuffer recordBuffer(periodBufferSize);
+	Buffer recordBuffer(periodBufferSize);
+
+	std::size_t captureOffset = 0U;
+	std::size_t ringsCaptured = 0U;
+	std::size_t recordOffset = 0U;
+	std::size_t ringsRecorded = 0U;
 
 	while (_shouldRun.load()) {
-		boost::unique_lock<boost::mutex> lock(_captureQueueMutex);
-		while (_captureQueue.empty()) {
-			_captureQueueCond.wait(lock);
+		// Waiting for data to be captured
+		std::size_t absoluteRecordOffset = ringsRecorded * PeriodsInBuffer + recordOffset;
+
+		boost::unique_lock<boost::mutex> lock(_captureMutex);
+		_recordOffset = recordOffset;
+		_ringsRecorded = ringsRecorded;
+		while (absoluteRecordOffset >= (_ringsCaptured * PeriodsInBuffer + _captureOffset)) {
+			_captureCond.wait(lock);
 			if (!_shouldRun.load()) {
 				break;
 			}
 		}
-		//CaptureQueue captureQueue;
-		//captureQueue.swap(_captureQueue);
-		CaptureQueue captureQueue(_captureQueue);
-		while (!_captureQueue.empty()) {
-			_captureQueue.pop();
-		}
+		captureOffset = _captureOffset;
+		ringsCaptured = _ringsCaptured;
 		lock.unlock();
 
-		for (std::size_t i = 0U; i < captureQueue.size(); ++i) {
-			std::cout << '+';
+		std::size_t absoluteCaptureOffset = ringsCaptured * PeriodsInBuffer + captureOffset;
+		if (absoluteRecordOffset >= absoluteCaptureOffset) {
+			continue;
 		}
 
-		while (!captureQueue.empty()) {
-			CaptureBuffer captureBuffer = captureQueue.front();
-
+		// Writing captured data
+		while ((ringsRecorded * PeriodsInBuffer + recordOffset) < absoluteCaptureOffset) {
+			// Copying data to record buffer
 			for (std::size_t i = 0; i < periodBufferSize; i += bytesPerSample) {
 				std::size_t frame = i / bytesPerSample / channels;
 				std::size_t channel = i / bytesPerSample % channels;
 				std::size_t j = channel * _periodSize * bytesPerSample + frame * bytesPerSample;
 
-				memcpy(&recordBuffer[j], &captureBuffer[i], bytesPerSample);
+				memcpy(&recordBuffer[j], &_captureRingBuffer[recordOffset * periodBufferSize + i], bytesPerSample);
 			}
 
-			captureQueue.pop();
-
+			// Savind record buffer data to WAV file
 			for (std::size_t i = 0U; i < channels; ++i) {
 				sf_count_t itemsToWrite = 0;
 				sf_count_t itemsWritten = 0;
@@ -350,6 +400,13 @@ void MultitrackRecorder::runRecord(const std::string& location)
 					msg << "Unconsistent written items count: " << itemsWritten << '/' << itemsToWrite;
 					throw std::runtime_error(msg.str());
 				}
+
+				std::cout << '+';
+			}
+
+			recordOffset = (recordOffset + 1) % PeriodsInBuffer;
+			if (recordOffset == 0U) {
+				++ringsRecorded;
 			}
 		}
 	}
