@@ -71,11 +71,9 @@ private:
 	boost::atomic<std::size_t> _periodBufferSize;
 
 	Buffer _captureRingBuffer;
-	Buffer _recordBuffer;
 
-	CaptureQueue _captureQueue;
-	boost::condition_variable _captureQueueCond;
-	boost::mutex _captureQueueMutex;
+	boost::condition_variable _captureCond;
+	boost::mutex _captureMutex;
 	std::size_t _captureOffset;
 	std::size_t _ringsCaptured;
 	std::size_t _recordOffset;
