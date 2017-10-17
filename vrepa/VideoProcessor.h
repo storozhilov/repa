@@ -3,28 +3,24 @@
 
 #include <glibmm/main.h>
 #include <gstreamermm.h>
-#include <memory>
-#include <thread>
 
 class VideoProcessor
 {
 public:
+	typedef std::size_t SourceHandle;
+
 	VideoProcessor();
 
 	void start();
 	void stop();
+
+	void switchSource(const SourceHandle&);
 private:
 	void process();
 	bool on_bus_message(const Glib::RefPtr<Gst::Bus>&, const Glib::RefPtr<Gst::Message>& message);
-	void on_rtspsrc_pad_added(const Glib::RefPtr<Gst::Pad>& newPad);
+	void on_rtspsrc_pad_added(const Glib::RefPtr<Gst::Pad>& newPad, Glib::RefPtr<Gst::Element> rtph264depay);
 
-	std::unique_ptr<std::thread> _mainThread;
-	Glib::RefPtr<Glib::MainLoop> _mainLoop;
 	Glib::RefPtr<Gst::Pipeline> _pipeline;
-	Glib::RefPtr<Gst::Element> _source;
-	Glib::RefPtr<Gst::Element> _decoder;
-	Glib::RefPtr<Gst::Element> _playBin;
-	Glib::RefPtr<Gst::Element> _rtph264depay;
 };
 
 #endif
