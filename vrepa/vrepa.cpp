@@ -31,7 +31,8 @@ int main(int argc, char * argv[]) {
 	std::cout << "Video processor started" << std::endl;
 
 	while (!static_cast<bool>(stopped)) {
-		std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+		std::this_thread::sleep_for(std::chrono::milliseconds(2000));
+		vp.switchSource(0);
 	}
 	std::cout << "Termination command received -> exiting" << std::endl;
 	vp.stop();
