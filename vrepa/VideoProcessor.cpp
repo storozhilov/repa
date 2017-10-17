@@ -1,5 +1,6 @@
 #include "VideoProcessor.h"
 #include <iostream>
+#include <stdexcept>
 
 VideoProcessor::VideoProcessor() :
 	_mainThread(nullptr),
@@ -16,16 +17,26 @@ VideoProcessor::VideoProcessor() :
 void VideoProcessor::start()
 {
 	//_mainLoop = Glib::MainLoop::create();
-	_pipeline = Gst::Pipeline::create("video-processor-pipeline");
-	_pipeline->set_state(Gst::STATE_PLAYING);
+	//_pipeline = Gst::Pipeline::create("video-processor-pipeline");
+	//_pipeline->set_state(Gst::STATE_PLAYING);
 	//_mainThread.reset(new std::thread([this] { this->process(); }));
+	//Glib::RefPtr<Gst::Element> playBin = Gst::ElementFactory::create_element("playbin");
+	_playBin = Gst::ElementFactory::create_element("playbin");
+	if (!_playBin) {
+		throw std::runtime_error("Error creating 'playbin2' element");
+	}
+	_playBin->set_property("uri",
+		Glib::ustring("rtsp://192.168.1.2:554/user=admin_password=tlJwpbo6_channel=1_stream=0.sdp?real_stream"));
+	_playBin->set_state(Gst::STATE_PLAYING);
 }
 
 void VideoProcessor::stop()
 {
+	_playBin->set_state(Gst::STATE_NULL);
+	_playBin.reset();
 	//_mainThread->join();
-	_pipeline->set_state(Gst::STATE_NULL);
-	_pipeline.reset();
+	//_pipeline->set_state(Gst::STATE_NULL);
+	//_pipeline.reset();
 	//_mainLoop.reset();
 }
 
