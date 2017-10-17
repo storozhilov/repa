@@ -22,6 +22,7 @@ private:
 	Glib::RefPtr<Gst::Pipeline> _pipeline;
 	Glib::RefPtr<Gst::Element> _source;
 	Glib::RefPtr<Gst::Element> _decoder;
+	Glib::RefPtr<Gst::Element> _playBin;
 };
 
 #endif

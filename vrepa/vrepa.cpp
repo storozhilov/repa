@@ -10,6 +10,9 @@
 
 //#include "MultitrackRecorder.h"
 
+#include <chrono>
+#include <thread>
+
 #include "VideoProcessor.h"
 
 /*namespace
@@ -32,6 +35,9 @@ int main(int argc, char * argv[]) {
 
 	VideoProcessor vp;
 	vp.start();
+	std::cout << "Video processor started" << std::endl;
+
+	std::this_thread::sleep_for(std::chrono::milliseconds(2 * 1000));
 /*	std::string device;
 	std::string location;
 
@@ -64,6 +70,6 @@ int main(int argc, char * argv[]) {
 	std::cout << "Termination command received -> exiting" << std::endl;
 	recorder.stop();
 	return 0;*/
-	std::cout << "Hello from vrepa" << std::endl;
 	vp.stop();
+	std::cout << "Video processor stopped" << std::endl;
 }
