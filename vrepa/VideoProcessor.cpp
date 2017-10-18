@@ -28,6 +28,10 @@ void VideoProcessor::start()
 	if (!h264parse1) {
 		throw std::runtime_error("Error creating 'h264parse' element");
 	}
+	Glib::RefPtr<Gst::Element> vaapidecode1 = Gst::ElementFactory::create_element("vaapidecode");
+	if (!vaapidecode1) {
+		throw std::runtime_error("Error creating 'vaapidecode' element");
+	}
 
 	Glib::RefPtr<Gst::Element> rtspsrc2 = Gst::ElementFactory::create_element("rtspsrc");
 	if (!rtspsrc2) {
@@ -43,6 +47,10 @@ void VideoProcessor::start()
 	if (!h264parse2) {
 		throw std::runtime_error("Error creating 'h264parse' element");
 	}
+	Glib::RefPtr<Gst::Element> vaapidecode2 = Gst::ElementFactory::create_element("vaapidecode");
+	if (!vaapidecode2) {
+		throw std::runtime_error("Error creating 'vaapidecode' element");
+	}
 
 	_inputSelector = Gst::ElementFactory::create_element("input-selector");
 	if (!_inputSelector) {
@@ -57,18 +65,18 @@ void VideoProcessor::start()
 		throw std::runtime_error("Error creating 'vaapisink' element");
 	}
 
-	_pipeline->add(rtspsrc1)->add(rtph264depay1)->add(h264parse1);
-	_pipeline->add(rtspsrc2)->add(rtph264depay2)->add(h264parse2);
+	_pipeline->add(rtspsrc1)->add(rtph264depay1)->add(h264parse1)->add(vaapidecode1);
+	_pipeline->add(rtspsrc2)->add(rtph264depay2)->add(h264parse2)->add(vaapidecode2);
 
-	_pipeline->add(_inputSelector)->add(vaapidecode)->add(vaapisink);
+	_pipeline->add(_inputSelector)->add(vaapisink);
 
 	rtspsrc1->signal_pad_added().connect(sigc::bind(sigc::mem_fun(*this, &VideoProcessor::on_rtspsrc_pad_added), rtph264depay1));
-	rtph264depay1->link(h264parse1)->link(_inputSelector);
+	rtph264depay1->link(h264parse1)->link(vaapidecode1)->link(_inputSelector);
 
 	rtspsrc2->signal_pad_added().connect(sigc::bind(sigc::mem_fun(*this, &VideoProcessor::on_rtspsrc_pad_added), rtph264depay2));
-	rtph264depay2->link(h264parse2)->link(_inputSelector);
+	rtph264depay2->link(h264parse2)->link(vaapidecode2)->link(_inputSelector);
 
-	_inputSelector->link(vaapidecode)->link(vaapisink);
+	_inputSelector->link(vaapisink);
 
 	_pipeline->set_state(Gst::STATE_PLAYING);
 
