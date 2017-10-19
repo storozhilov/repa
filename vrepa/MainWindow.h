@@ -10,6 +10,8 @@ public:
 	MainWindow(VideoProcessor& vp);
 protected:
 	Gtk::VBox _vbox;
+
+	virtual bool on_delete_event(GdkEventAny * event);
 };
 
 #endif
