@@ -7,4 +7,5 @@ sudo apt-get install -y \
 	libsndfile1-dev \
 	libgstreamer1.0-dev \
 	libglibmm-2.4-dev \
+	libgtkmm-2.4-dev \
 	libgstreamermm-1.0-dev

@@ -5,105 +5,117 @@
 
 VideoProcessor::VideoProcessor() :
 	_pipeline(),
-	_inputSelector()
-{}
-
-void VideoProcessor::start()
+	_inputSelector(),
+	_mainSink(),
+	_sourcesMap(),
+	_sourcesMapMutex()
 {
 	_pipeline = Gst::Pipeline::create("video-processor-pipeline");
-
 	_pipeline->get_bus()->add_watch(sigc::mem_fun(*this, &VideoProcessor::on_bus_message));
-
-	Glib::RefPtr<Gst::Element> rtspsrc1 = Gst::ElementFactory::create_element("rtspsrc");
-	if (!rtspsrc1) {
-		throw std::runtime_error("Error creating 'rtspsrc' element");
-	}
-	rtspsrc1->set_property("location",
-		Glib::ustring("rtsp://192.168.1.2:554/user=admin_password=tlJwpbo6_channel=1_stream=0.sdp?real_stream"));
-	Glib::RefPtr<Gst::Element> rtph264depay1 = Gst::ElementFactory::create_element("rtph264depay");
-	if (!rtph264depay1) {
-		throw std::runtime_error("Error creating 'rtph264depay' element");
-	}
-	Glib::RefPtr<Gst::Element> h264parse1 = Gst::ElementFactory::create_element("h264parse");
-	if (!h264parse1) {
-		throw std::runtime_error("Error creating 'h264parse' element");
-	}
-	Glib::RefPtr<Gst::Element> vaapidecode1 = Gst::ElementFactory::create_element("vaapidecode");
-	if (!vaapidecode1) {
-		throw std::runtime_error("Error creating 'vaapidecode' element");
-	}
-
-	Glib::RefPtr<Gst::Element> rtspsrc2 = Gst::ElementFactory::create_element("rtspsrc");
-	if (!rtspsrc2) {
-		throw std::runtime_error("Error creating 'rtspsrc' element");
-	}
-	rtspsrc2->set_property("location",
-		Glib::ustring("rtsp://192.168.1.3:554/user=admin_password=tlJwpbo6_channel=1_stream=0.sdp?real_stream"));
-	Glib::RefPtr<Gst::Element> rtph264depay2 = Gst::ElementFactory::create_element("rtph264depay");
-	if (!rtph264depay2) {
-		throw std::runtime_error("Error creating 'rtph264depay' element");
-	}
-	Glib::RefPtr<Gst::Element> h264parse2 = Gst::ElementFactory::create_element("h264parse");
-	if (!h264parse2) {
-		throw std::runtime_error("Error creating 'h264parse' element");
-	}
-	Glib::RefPtr<Gst::Element> vaapidecode2 = Gst::ElementFactory::create_element("vaapidecode");
-	if (!vaapidecode2) {
-		throw std::runtime_error("Error creating 'vaapidecode' element");
-	}
 
 	_inputSelector = Gst::ElementFactory::create_element("input-selector");
 	if (!_inputSelector) {
 		throw std::runtime_error("Error creating 'input-selector' element");
 	}
-	Glib::RefPtr<Gst::Element> vaapidecode = Gst::ElementFactory::create_element("vaapidecode");
-	if (!vaapidecode) {
-		throw std::runtime_error("Error creating 'vaapidecode' element");
-	}
-	Glib::RefPtr<Gst::Element> vaapisink = Gst::ElementFactory::create_element("vaapisink");
-	if (!vaapisink) {
+	_mainSink = Gst::ElementFactory::create_element("vaapisink");
+	if (!_mainSink) {
 		throw std::runtime_error("Error creating 'vaapisink' element");
 	}
 
-	_pipeline->add(rtspsrc1)->add(rtph264depay1)->add(h264parse1)->add(vaapidecode1);
-	_pipeline->add(rtspsrc2)->add(rtph264depay2)->add(h264parse2)->add(vaapidecode2);
+	_pipeline->add(_inputSelector)->add(_mainSink);
+	_inputSelector->link(_mainSink);
 
-	_pipeline->add(_inputSelector)->add(vaapisink);
+	/*Glib::RefPtr<Gst::Element> defaultSource = Gst::ElementFactory::create_element("videotestsrc");
+	if (!defaultSource) {
+		throw std::runtime_error("Error creating 'videotestsrc' element");
+	}
+	_pipeline->all(defaultSource);
+	defaultSource->link(_inputSelector);*/
 
-	rtspsrc1->signal_pad_added().connect(sigc::bind(sigc::mem_fun(*this, &VideoProcessor::on_rtspsrc_pad_added), rtph264depay1));
-	rtph264depay1->link(h264parse1)->link(vaapidecode1)->link(_inputSelector);
+	_inputSelector->signal_pad_added().connect(sigc::mem_fun(*this, &VideoProcessor::on_selector_pad_added));
+}
 
-	rtspsrc2->signal_pad_added().connect(sigc::bind(sigc::mem_fun(*this, &VideoProcessor::on_rtspsrc_pad_added), rtph264depay2));
-	rtph264depay2->link(h264parse2)->link(vaapidecode2)->link(_inputSelector);
-
-	_inputSelector->link(vaapisink);
-
+void VideoProcessor::start()
+{
 	_pipeline->set_state(Gst::STATE_PLAYING);
+}
 
+VideoProcessor::~VideoProcessor()
+{
+	_pipeline.reset();
 }
 
 void VideoProcessor::stop()
 {
 	_pipeline->set_state(Gst::STATE_NULL);
-	_pipeline.reset();
 }
 
-namespace {
-	std::size_t sourceCounter = 0;
-}
-
-void VideoProcessor::switchSource(const SourceHandle&)
+VideoProcessor::SourceHandle VideoProcessor::addSource(const char * url)
 {
-	std::size_t sourceIndex = sourceCounter++ % 2;
-	std::cout << "sourceIndex: " << sourceIndex << std::endl;
-	if (sourceIndex > 0) {
-		_inputSelector->set_property("active-pad", _inputSelector->get_static_pad("sink_1"));
-	} else {
-		_inputSelector->set_property("active-pad", _inputSelector->get_static_pad("sink_0"));
+	Glib::RefPtr<Gst::Element> rtspsrc = Gst::ElementFactory::create_element("rtspsrc");
+	if (!rtspsrc) {
+		throw std::runtime_error("Error creating 'rtspsrc' element");
 	}
+	rtspsrc->set_property("location", Glib::ustring(url));
+	Glib::RefPtr<Gst::Element> rtph264depay = Gst::ElementFactory::create_element("rtph264depay");
+	if (!rtph264depay) {
+		throw std::runtime_error("Error creating 'rtph264depay' element");
+	}
+	Glib::RefPtr<Gst::Element> h264parse = Gst::ElementFactory::create_element("h264parse");
+	if (!h264parse) {
+		throw std::runtime_error("Error creating 'h264parse' element");
+	}
+	Glib::RefPtr<Gst::Element> vaapidecode = Gst::ElementFactory::create_element("vaapidecode");
+	if (!vaapidecode) {
+		throw std::runtime_error("Error creating 'vaapidecode' element");
+	}
+
+	_pipeline->add(rtspsrc)->add(rtph264depay)->add(h264parse)->add(vaapidecode);
+
+	SourceHandle sourceHandle;
+	{
+		std::lock_guard<std::mutex> lock(_sourcesMapMutex);
+		sourceHandle = _sourcesMap.empty() ? 1 : _sourcesMap.rbegin()->first + 1;
+		_sourcesMap.insert(SourcesMap::value_type(sourceHandle, std::string()));
+	}
+
+	rtspsrc->signal_pad_added().connect(sigc::bind(sigc::mem_fun(*this, &VideoProcessor::on_rtspsrc_pad_added),
+			rtph264depay, sourceHandle));
+	rtph264depay->link(h264parse)->link(vaapidecode)->link(_inputSelector);
+
+	return sourceHandle;
 }
 
-void VideoProcessor::on_rtspsrc_pad_added(const Glib::RefPtr<Gst::Pad>& newPad, Glib::RefPtr<Gst::Element> rtph264depay)
+void VideoProcessor::switchSource(const SourceHandle sourceHandle)
+{
+	bool sourceFound = false;
+	std::string selectorPadName;
+	{
+		std::lock_guard<std::mutex> lock(_sourcesMapMutex);
+		SourcesMap::const_iterator pos = _sourcesMap.find(sourceHandle);
+		if (pos != _sourcesMap.end()) {
+			sourceFound = true;
+			selectorPadName = pos->second;
+		}
+	}
+
+	if (!sourceFound) {
+		std::cerr << "Source (" << sourceHandle << ") not found" << std::endl;
+		return;
+	}
+	if (selectorPadName.empty()) {
+		std::cerr << "Source (" << sourceHandle << ") does not have a pad on input selector" << std::endl;
+		return;
+	}
+
+	std::cout << "Switching to " << sourceHandle << " source, input selector pad name: " <<
+		selectorPadName << ")" << std::endl;
+
+	_inputSelector->set_property("active-pad", _inputSelector->get_static_pad(selectorPadName.c_str()));
+}
+
+void VideoProcessor::on_rtspsrc_pad_added(const Glib::RefPtr<Gst::Pad>& newPad, Glib::RefPtr<Gst::Element> rtph264depay,
+		SourceHandle sourceHandle)
 {
 	Glib::RefPtr<Gst::Pad> sinkPad = rtph264depay->get_static_pad("sink");
 	Gst::PadLinkReturn ret = newPad->link(sinkPad);
@@ -115,7 +127,27 @@ void VideoProcessor::on_rtspsrc_pad_added(const Glib::RefPtr<Gst::Pad>& newPad, 
 		throw std::runtime_error(msg.str());
 	}
 
-	std::cout << "New pad added: " << newPad->get_name() << std::endl;
+	std::cout << "New source pad added to 'rtph264depay' element for " << sourceHandle << 
+		" source: " << newPad->get_name() << std::endl;
+}
+
+void VideoProcessor::on_selector_pad_added(const Glib::RefPtr<Gst::Pad>& newPad)
+{
+	SourceHandle sourceHandle;
+	{
+		std::lock_guard<std::mutex> lock(_sourcesMapMutex);
+		SourcesMap::iterator pos = _sourcesMap.begin();
+		while (pos != _sourcesMap.end()) {
+			if (pos->second.empty()) {
+				sourceHandle = pos->first;
+				pos->second = newPad->get_name();
+				break;
+			}
+			++pos;
+		}
+	}
+	std::cout << "New sink pad added to 'input-selector' element for " <<
+		sourceHandle << " source: " << newPad->get_name() << std::endl;
 }
 
 bool VideoProcessor::on_bus_message(const Glib::RefPtr<Gst::Bus>&, const Glib::RefPtr<Gst::Message>& message)
