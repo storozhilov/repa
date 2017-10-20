@@ -7,6 +7,8 @@
 #include <map>
 #include <mutex>
 
+class MainWindow;
+
 class VideoProcessor
 {
 public:
@@ -15,7 +17,7 @@ public:
 	
 	typedef std::size_t SourceHandle;
 
-	VideoProcessor();
+	VideoProcessor(MainWindow& mainWindow);
 	~VideoProcessor();
 
 	void start();
@@ -27,10 +29,12 @@ private:
 	typedef std::map<SourceHandle, std::string> SourcesMap;
 
 	bool on_bus_message(const Glib::RefPtr<Gst::Bus>&, const Glib::RefPtr<Gst::Message>& message);
+	void on_bus_message_sync(const Glib::RefPtr<Gst::Message>& message);
 	void on_rtspsrc_pad_added(const Glib::RefPtr<Gst::Pad>& newPad, Glib::RefPtr<Gst::Element> rtph264depay,
 			SourceHandle sourceHandle);
 	void on_selector_pad_added(const Glib::RefPtr<Gst::Pad>& newPad);
 
+	MainWindow& _mainWindow;
 	Glib::RefPtr<Gst::Pipeline> _pipeline;
 	Glib::RefPtr<Gst::Element> _inputSelector;
 	Glib::RefPtr<Gst::Element> _mainSink;

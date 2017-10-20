@@ -1,11 +1,13 @@
 #include "VideoProcessor.h"
+#include "MainWindow.h"
 #include <iostream>
 #include <sstream>
 #include <stdexcept>
 #include <cstring>
 #include <gstreamermm/videotestsrc.h>
 
-VideoProcessor::VideoProcessor() :
+VideoProcessor::VideoProcessor(MainWindow& mainWindow) :
+	_mainWindow(mainWindow),
 	_pipeline(),
 	_inputSelector(),
 	_mainSink(),
@@ -13,6 +15,9 @@ VideoProcessor::VideoProcessor() :
 	_sourcesMapMutex()
 {
 	_pipeline = Gst::Pipeline::create("video-processor-pipeline");
+
+	_pipeline->get_bus()->enable_sync_message_emission();
+	_pipeline->get_bus()->signal_sync_message().connect(sigc::mem_fun(*this, &VideoProcessor::on_bus_message_sync));
 	_pipeline->get_bus()->add_watch(sigc::mem_fun(*this, &VideoProcessor::on_bus_message));
 
 	_inputSelector = Gst::ElementFactory::create_element("input-selector");
@@ -168,6 +173,26 @@ void VideoProcessor::on_selector_pad_added(const Glib::RefPtr<Gst::Pad>& newPad)
 	}
 	std::cout << "New sink pad added to 'input-selector' element for " <<
 		sourceHandle << " source: " << newPad->get_name() << std::endl;
+}
+
+void VideoProcessor::on_bus_message_sync(const Glib::RefPtr<Gst::Message>& message)
+{
+	if (!gst_is_video_overlay_prepare_window_handle_message (message->gobj())) {
+		return;
+	}
+
+	if (_mainWindow._mainVideoAreaWindowHandle == 0) {
+		std::cerr << "ERROR: Main video area window handle is not set" << std::endl;
+		return;
+	}
+
+	GstVideoOverlay *overlay;
+	overlay = GST_VIDEO_OVERLAY (GST_MESSAGE_SRC (message->gobj()));
+	gst_video_overlay_set_window_handle (overlay, _mainWindow._mainVideoAreaWindowHandle);
+
+	std::cout << "VideoProcessor::on_bus_message_sync(): Video overlay of '" <<
+		Glib::RefPtr<Gst::Element>::cast_dynamic(message->get_source())->get_name() <<
+		"' element is attached to main video area window handle" << std::endl;
 }
 
 bool VideoProcessor::on_bus_message(const Glib::RefPtr<Gst::Bus>&, const Glib::RefPtr<Gst::Message>& message)
