@@ -10,6 +10,9 @@
 class VideoProcessor
 {
 public:
+	static constexpr const char * SourceTestSnow = "videotestsrc:snow";
+	static constexpr const char * SourceTestSmpte = "videotestsrc:smpte";
+	
 	typedef std::size_t SourceHandle;
 
 	VideoProcessor();

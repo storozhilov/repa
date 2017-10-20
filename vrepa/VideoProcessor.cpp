@@ -2,6 +2,8 @@
 #include <iostream>
 #include <sstream>
 #include <stdexcept>
+#include <cstring>
+#include <gstreamermm/videotestsrc.h>
 
 VideoProcessor::VideoProcessor() :
 	_pipeline(),
@@ -52,26 +54,6 @@ void VideoProcessor::stop()
 
 VideoProcessor::SourceHandle VideoProcessor::addSource(const char * url)
 {
-	Glib::RefPtr<Gst::Element> rtspsrc = Gst::ElementFactory::create_element("rtspsrc");
-	if (!rtspsrc) {
-		throw std::runtime_error("Error creating 'rtspsrc' element");
-	}
-	rtspsrc->set_property("location", Glib::ustring(url));
-	Glib::RefPtr<Gst::Element> rtph264depay = Gst::ElementFactory::create_element("rtph264depay");
-	if (!rtph264depay) {
-		throw std::runtime_error("Error creating 'rtph264depay' element");
-	}
-	Glib::RefPtr<Gst::Element> h264parse = Gst::ElementFactory::create_element("h264parse");
-	if (!h264parse) {
-		throw std::runtime_error("Error creating 'h264parse' element");
-	}
-	Glib::RefPtr<Gst::Element> vaapidecode = Gst::ElementFactory::create_element("vaapidecode");
-	if (!vaapidecode) {
-		throw std::runtime_error("Error creating 'vaapidecode' element");
-	}
-
-	_pipeline->add(rtspsrc)->add(rtph264depay)->add(h264parse)->add(vaapidecode);
-
 	SourceHandle sourceHandle;
 	{
 		std::lock_guard<std::mutex> lock(_sourcesMapMutex);
@@ -79,9 +61,47 @@ VideoProcessor::SourceHandle VideoProcessor::addSource(const char * url)
 		_sourcesMap.insert(SourcesMap::value_type(sourceHandle, std::string()));
 	}
 
-	rtspsrc->signal_pad_added().connect(sigc::bind(sigc::mem_fun(*this, &VideoProcessor::on_rtspsrc_pad_added),
-			rtph264depay, sourceHandle));
-	rtph264depay->link(h264parse)->link(vaapidecode)->link(_inputSelector);
+	if (strcmp(url, SourceTestSnow) == 0) {
+		Glib::RefPtr<Gst::Element> videotestsrc = Gst::ElementFactory::create_element("videotestsrc");
+		if (!videotestsrc) {
+			throw std::runtime_error("Error creating 'videotestsrc' element");
+		}
+		videotestsrc->set_property("pattern", Gst::VIDEO_TEST_SRC_CIRCULAR);
+		_pipeline->add(videotestsrc);
+		videotestsrc->link(_inputSelector);
+	} else if (strcmp(url, SourceTestSmpte) == 0) {
+		Glib::RefPtr<Gst::Element> videotestsrc = Gst::ElementFactory::create_element("videotestsrc");
+		if (!videotestsrc) {
+			throw std::runtime_error("Error creating 'videotestsrc' element");
+		}
+		videotestsrc->set_property("pattern", Gst::VIDEO_TEST_SRC_SNOW);
+		_pipeline->add(videotestsrc);
+		videotestsrc->link(_inputSelector);
+	} else {
+		Glib::RefPtr<Gst::Element> rtspsrc = Gst::ElementFactory::create_element("rtspsrc");
+		if (!rtspsrc) {
+			throw std::runtime_error("Error creating 'rtspsrc' element");
+		}
+		rtspsrc->set_property("location", Glib::ustring(url));
+		Glib::RefPtr<Gst::Element> rtph264depay = Gst::ElementFactory::create_element("rtph264depay");
+		if (!rtph264depay) {
+			throw std::runtime_error("Error creating 'rtph264depay' element");
+		}
+		Glib::RefPtr<Gst::Element> h264parse = Gst::ElementFactory::create_element("h264parse");
+		if (!h264parse) {
+			throw std::runtime_error("Error creating 'h264parse' element");
+		}
+		Glib::RefPtr<Gst::Element> vaapidecode = Gst::ElementFactory::create_element("vaapidecode");
+		if (!vaapidecode) {
+			throw std::runtime_error("Error creating 'vaapidecode' element");
+		}
+
+		_pipeline->add(rtspsrc)->add(rtph264depay)->add(h264parse)->add(vaapidecode);
+
+		rtspsrc->signal_pad_added().connect(sigc::bind(sigc::mem_fun(*this, &VideoProcessor::on_rtspsrc_pad_added),
+				rtph264depay, sourceHandle));
+		rtph264depay->link(h264parse)->link(vaapidecode)->link(_inputSelector);
+	}
 
 	return sourceHandle;
 }

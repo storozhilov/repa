@@ -17,8 +17,10 @@ int main(int argc, char * argv[]) {
 	VideoProcessor vp;
 	std::vector<VideoProcessor::SourceHandle> sources(2);
 
-	sources[0] = vp.addSource("rtsp://192.168.1.2:554/user=admin_password=tlJwpbo6_channel=1_stream=0.sdp?real_stream");
-	sources[1] = vp.addSource("rtsp://192.168.1.3:554/user=admin_password=tlJwpbo6_channel=1_stream=0.sdp?real_stream");
+	//sources[0] = vp.addSource("rtsp://192.168.1.2:554/user=admin_password=tlJwpbo6_channel=1_stream=0.sdp?real_stream");
+	//sources[1] = vp.addSource("rtsp://192.168.1.3:554/user=admin_password=tlJwpbo6_channel=1_stream=0.sdp?real_stream");
+	sources[0] = vp.addSource(VideoProcessor::SourceTestSnow);
+	sources[1] = vp.addSource(VideoProcessor::SourceTestSmpte);
 
 	vp.start();
 	std::cout << "Video processor started" << std::endl;
