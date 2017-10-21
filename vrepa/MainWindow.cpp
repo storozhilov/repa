@@ -7,14 +7,24 @@ MainWindow::MainWindow() :
 	_vbox(false, 6),
 	_mainVideoArea(),
 	_hbox(false, 6),
-	_closeButton("Close"),
+	_buttonBox(),
+	_firstSourceButton("First"),
+	_secondSourceButton("Second"),
+	_firstSourceHandle(),
+	_secondSourceHandle(),
 	_mainVideoAreaWindowHandle(0),
 	_videoProcessor()
 {
 	add(_vbox);
 	_vbox.pack_start(_mainVideoArea, Gtk::PACK_EXPAND_WIDGET);
 	_vbox.pack_start(_hbox, Gtk::PACK_SHRINK);
-	_vbox.pack_start(_closeButton, Gtk::PACK_SHRINK);
+	_vbox.pack_start(_buttonBox, Gtk::PACK_SHRINK);
+
+	_buttonBox.pack_start(_firstSourceButton);
+	_buttonBox.pack_start(_secondSourceButton);
+
+	_firstSourceButton.signal_clicked().connect(sigc::mem_fun(*this, &MainWindow::on_first_button_clicked));
+	_secondSourceButton.signal_clicked().connect(sigc::mem_fun(*this, &MainWindow::on_second_button_clicked));
 
 	_mainVideoArea.signal_realize().connect(sigc::mem_fun(*this, &MainWindow::on_main_video_area_realize));
 
@@ -42,11 +52,23 @@ void MainWindow::on_main_video_area_realize()
 	_videoProcessor.reset(new VideoProcessor(*this));
 	std::cout << "Video processor created" << std::endl;
 
-	//sources[0] = vp.addSource("rtsp://192.168.1.2:554/user=admin_password=tlJwpbo6_channel=1_stream=0.sdp?real_stream");
-	//sources[1] = vp.addSource("rtsp://192.168.1.3:554/user=admin_password=tlJwpbo6_channel=1_stream=0.sdp?real_stream");
-	/*sources[0] = */_videoProcessor->addSource(VideoProcessor::SourceTestSnow);
-	/*sources[1] = */_videoProcessor->addSource(VideoProcessor::SourceTestSmpte);
+	//_firstSourceHandle = _videoProcessor->addSource(
+	//		"rtsp://192.168.1.2:554/user=admin_password=tlJwpbo6_channel=1_stream=0.sdp?real_stream");
+	//_secondSourceHandle = _videoProcessor->addSource(
+	//		"rtsp://192.168.1.3:554/user=admin_password=tlJwpbo6_channel=1_stream=0.sdp?real_stream");
+	_firstSourceHandle = _videoProcessor->addSource(VideoProcessor::SourceTestSmpte100);
+	_secondSourceHandle = _videoProcessor->addSource(VideoProcessor::SourceTestCircular);
 
 	_videoProcessor->start();
 	std::cout << "Video processor started" << std::endl;
+}
+
+void MainWindow::on_first_button_clicked()
+{
+	_videoProcessor->switchSource(_firstSourceHandle);
+}
+
+void MainWindow::on_second_button_clicked()
+{
+	_videoProcessor->switchSource(_secondSourceHandle);
 }

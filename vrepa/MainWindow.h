@@ -13,7 +13,15 @@ protected:
 	Gtk::VBox _vbox;
 	Gtk::DrawingArea _mainVideoArea;
 	Gtk::HBox _hbox;
-	Gtk::Button _closeButton;
+	Gtk::HButtonBox _buttonBox;
+	Gtk::Button _firstSourceButton;
+	Gtk::Button _secondSourceButton;
+
+	VideoProcessor::SourceHandle _firstSourceHandle;
+	VideoProcessor::SourceHandle _secondSourceHandle;
+
+	void on_first_button_clicked();
+	void on_second_button_clicked();
 
 	virtual bool on_delete_event(GdkEventAny * event);
 private:

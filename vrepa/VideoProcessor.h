@@ -12,8 +12,8 @@ class MainWindow;
 class VideoProcessor
 {
 public:
-	static constexpr const char * SourceTestSnow = "videotestsrc:snow";
-	static constexpr const char * SourceTestSmpte = "videotestsrc:smpte";
+	static constexpr const char * SourceTestCircular = "videotestsrc:circular";
+	static constexpr const char * SourceTestSmpte100 = "videotestsrc:smpte";
 	
 	typedef std::size_t SourceHandle;
 

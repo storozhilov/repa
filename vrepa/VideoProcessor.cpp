@@ -66,7 +66,7 @@ VideoProcessor::SourceHandle VideoProcessor::addSource(const char * url)
 		_sourcesMap.insert(SourcesMap::value_type(sourceHandle, std::string()));
 	}
 
-	if (strcmp(url, SourceTestSnow) == 0) {
+	if (strcmp(url, SourceTestCircular) == 0) {
 		Glib::RefPtr<Gst::Element> videotestsrc = Gst::ElementFactory::create_element("videotestsrc");
 		if (!videotestsrc) {
 			throw std::runtime_error("Error creating 'videotestsrc' element");
@@ -74,12 +74,12 @@ VideoProcessor::SourceHandle VideoProcessor::addSource(const char * url)
 		videotestsrc->set_property("pattern", Gst::VIDEO_TEST_SRC_CIRCULAR);
 		_pipeline->add(videotestsrc);
 		videotestsrc->link(_inputSelector);
-	} else if (strcmp(url, SourceTestSmpte) == 0) {
+	} else if (strcmp(url, SourceTestSmpte100) == 0) {
 		Glib::RefPtr<Gst::Element> videotestsrc = Gst::ElementFactory::create_element("videotestsrc");
 		if (!videotestsrc) {
 			throw std::runtime_error("Error creating 'videotestsrc' element");
 		}
-		videotestsrc->set_property("pattern", Gst::VIDEO_TEST_SRC_SNOW);
+		videotestsrc->set_property("pattern", Gst::VIDEO_TEST_SRC_SMPTE100);
 		_pipeline->add(videotestsrc);
 		videotestsrc->link(_inputSelector);
 	} else {
@@ -133,8 +133,8 @@ void VideoProcessor::switchSource(const SourceHandle sourceHandle)
 		return;
 	}
 
-	std::cout << "Switching to " << sourceHandle << " source, input selector pad name: " <<
-		selectorPadName << ")" << std::endl;
+	std::cout << "Switching to " << sourceHandle << " source, input selector pad name: '" <<
+		selectorPadName << "'" << std::endl;
 
 	_inputSelector->set_property("active-pad", _inputSelector->get_static_pad(selectorPadName.c_str()));
 }
@@ -192,7 +192,7 @@ void VideoProcessor::on_bus_message_sync(const Glib::RefPtr<Gst::Message>& messa
 
 	std::cout << "VideoProcessor::on_bus_message_sync(): Video overlay of '" <<
 		Glib::RefPtr<Gst::Element>::cast_dynamic(message->get_source())->get_name() <<
-		"' element is attached to main video area window handle" << std::endl;
+		"' element is attached to the main video area window handle" << std::endl;
 }
 
 bool VideoProcessor::on_bus_message(const Glib::RefPtr<Gst::Bus>&, const Glib::RefPtr<Gst::Message>& message)
