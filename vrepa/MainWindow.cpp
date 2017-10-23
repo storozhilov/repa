@@ -10,9 +10,8 @@ MainWindow::MainWindow(SourceUris& sourceUris) :
 	_buttonBox(),
 	_firstSourceButton("First"),
 	_secondSourceButton("Second"),
-	_sourceVideoAreas(),
+	_sourcesMap(),
 	_sourceUris(sourceUris),
-	_sourceHandles(sourceUris.size()),
 	_mainVideoAreaWindowHandle(0),
 	_videoProcessor()
 {
@@ -53,8 +52,9 @@ void MainWindow::on_main_video_area_realize()
 	_videoProcessor.reset(new VideoProcessor(*this));
 	std::cout << "Video processor created" << std::endl;
 
-	for (std::size_t i = 0; i < _sourceUris.size(); ++i) {
-		_sourceHandles[i] = _videoProcessor->addSource(_sourceUris[i].c_str());
+	for (auto uri : _sourceUris) {
+		auto h = _videoProcessor->addSource(uri.c_str());
+		_sourcesMap.insert(SourcesMap::value_type(h, Glib::RefPtr<Gtk::DrawingArea>()));
 	}
 
 	_videoProcessor->start();
@@ -63,10 +63,10 @@ void MainWindow::on_main_video_area_realize()
 
 void MainWindow::on_first_button_clicked()
 {
-	_videoProcessor->switchSource(_sourceHandles[0]);
+	_videoProcessor->switchSource(_sourcesMap.begin()->first);
 }
 
 void MainWindow::on_second_button_clicked()
 {
-	_videoProcessor->switchSource(_sourceHandles[1]);
+	_videoProcessor->switchSource(_sourcesMap.rbegin()->first);
 }
