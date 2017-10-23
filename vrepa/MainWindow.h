@@ -4,27 +4,34 @@
 #include "VideoProcessor.h"
 #include <gtkmm.h>
 #include <memory>
+#include <vector>
 
 class MainWindow : public Gtk::Window
 {
 public:
-	MainWindow();
+	typedef std::vector<std::string> SourceUris;
+
+	MainWindow(SourceUris& sourceUris);
 protected:
+	typedef std::vector<Glib::RefPtr<Gtk::DrawingArea>> SourceVideoAreas;
+
 	Gtk::VBox _vbox;
 	Gtk::DrawingArea _mainVideoArea;
-	Gtk::HBox _hbox;
+	Gtk::HBox _sourcesBox;
 	Gtk::HButtonBox _buttonBox;
 	Gtk::Button _firstSourceButton;
 	Gtk::Button _secondSourceButton;
-
-	VideoProcessor::SourceHandle _firstSourceHandle;
-	VideoProcessor::SourceHandle _secondSourceHandle;
+	SourceVideoAreas _sourceVideoAreas;
 
 	void on_first_button_clicked();
 	void on_second_button_clicked();
 
 	virtual bool on_delete_event(GdkEventAny * event);
 private:
+	typedef std::vector<VideoProcessor::SourceHandle> SourceHandles;
+
+	SourceUris _sourceUris;
+	SourceHandles _sourceHandles;
 	guintptr _mainVideoAreaWindowHandle;
 	std::unique_ptr<VideoProcessor> _videoProcessor;
 
