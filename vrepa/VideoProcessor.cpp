@@ -56,6 +56,14 @@ VideoProcessor::SourceHandle VideoProcessor::addSource(const char * url)
 	if (!tee) {
 		throw std::runtime_error("Error creating 'tee' element");
 	}
+	Glib::RefPtr<Gst::Element> inputSelectorQueue = Gst::ElementFactory::create_element("queue");
+	if (!inputSelectorQueue) {
+		throw std::runtime_error("Error creating 'queue' element");
+	}
+	Glib::RefPtr<Gst::Element> sourceSinkQueue = Gst::ElementFactory::create_element("queue");
+	if (!sourceSinkQueue) {
+		throw std::runtime_error("Error creating 'queue' element");
+	}
 	Glib::RefPtr<Gst::Element> sourceSink = Gst::ElementFactory::create_element("vaapisink");
 	if (!sourceSink) {
 		throw std::runtime_error("Error creating 'vaapisink' element");
@@ -112,10 +120,9 @@ VideoProcessor::SourceHandle VideoProcessor::addSource(const char * url)
 		rtph264depay->link(h264parse)->link(src);
 	}
 
-	src->link(_inputSelector);
-	//_pipeline->add(tee)->add(sourceSink);
-	//src->link(tee)->link(_inputSelector);
-	//src->link(sourceSink);
+	_pipeline->add(tee)->add(inputSelectorQueue)->add(sourceSinkQueue)->add(sourceSink);
+	src->link(tee)->link(inputSelectorQueue)->link(_inputSelector);
+	tee->link(sourceSinkQueue)->link(sourceSink);
 
 	return sourceHandle;
 }
@@ -198,14 +205,37 @@ void VideoProcessor::on_bus_message_sync(const Glib::RefPtr<Gst::Message>& messa
 	GstVideoOverlay *overlay;
 	overlay = GST_VIDEO_OVERLAY (GST_MESSAGE_SRC (message->gobj()));
 
-	if (Glib::RefPtr<Gst::Element>::cast_dynamic(message->get_source()) == _mainSink) {
-		gst_video_overlay_set_window_handle (overlay, _mainWindow._mainVideoAreaWindowHandle);
+	Glib::RefPtr<Gst::Element> element = Glib::RefPtr<Gst::Element>::cast_dynamic(message->get_source());
 
-		std::cout << "VideoProcessor::on_bus_message_sync(): Video overlay of '" <<
-			Glib::RefPtr<Gst::Element>::cast_dynamic(message->get_source())->get_name() <<
+	if (element == _mainSink) {
+		gst_video_overlay_set_window_handle(overlay, _mainWindow._mainVideoAreaWindowHandle);
+		std::cout << "VideoProcessor::on_bus_message_sync(): Video overlay of '" << element->get_name() <<
 			"' element is attached to the main video area window handle" << std::endl;
 	} else {
-		std::cout << "VideoProcessor::on_bus_message_sync(): Foobar!!!!!!!!!" << std::endl;
+		SourceHandle sourceHandle;
+		bool sourceFound = false;
+		{
+			std::lock_guard<std::mutex> lock(_sourcesMapMutex);
+			SourcesMap::iterator pos = _sourcesMap.begin();
+			while (pos != _sourcesMap.end()) {
+				if (pos->second.sink == element) {
+					sourceHandle = pos->first;
+					sourceFound = true;
+					break;
+				}
+				++pos;
+			}
+		}
+		if (!sourceFound) {
+			std::ostringstream msg;
+			msg << "Source handle for '" << element->get_name() << "' element not found";
+			throw std::runtime_error(msg.str());
+		}
+
+		// TODO: Thread-safety?
+		gst_video_overlay_set_window_handle(overlay, _mainWindow._sourcesMap[sourceHandle].videoAreaWindowHandle);
+		std::cout << "VideoProcessor::on_bus_message_sync(): Video overlay of '" << element->get_name() <<
+			"' element is attached to the source video area window handle" << std::endl;
 	}
 }
 
