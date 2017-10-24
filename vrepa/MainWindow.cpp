@@ -1,5 +1,6 @@
 #include "MainWindow.h"
 #include <iostream>
+#include <algorithm>
 #include <gdk/gdkx.h>
 
 MainWindow::MainWindow(SourceUris& sourceUris) :
@@ -56,16 +57,13 @@ void MainWindow::on_main_video_area_realize()
 		auto h = _videoProcessor->addSource(uri.c_str());
 		SourceData sourceData;
 		sourceData.videoArea.reset(new Gtk::DrawingArea());
+		//sourceData.videoArea.reset(new VideoArea(*this));
 		_sourcesBox.pack_start(*sourceData.videoArea.get(), Gtk::PACK_SHRINK);
 		_sourcesMap.insert(SourcesMap::value_type(h, sourceData));
 		sourceData.videoArea->set_size_request(200, 150);
 		sourceData.videoArea->signal_realize().connect(sigc::bind(sigc::mem_fun(*this, &MainWindow::on_source_video_area_realize), h));
 		sourceData.videoArea->show();
 	}
-
-	// TODO: Start video-processor after all video areas are realized
-	_videoProcessor->start();
-	std::cout << "Video processor started" << std::endl;
 }
 
 void MainWindow::on_source_video_area_realize(VideoProcessor::SourceHandle sourceHandle)
@@ -73,6 +71,15 @@ void MainWindow::on_source_video_area_realize(VideoProcessor::SourceHandle sourc
 	gulong xid = GDK_WINDOW_XID (_sourcesMap[sourceHandle].videoArea->get_window()->gobj());
 	_sourcesMap[sourceHandle].videoAreaWindowHandle = xid;
 	std::cout << "Source video area realized, handle: " << xid << std::endl;
+
+	// Starting video-processor after all video areas are realized
+	std::size_t sourceVideoAreasRealized = std::count_if(_sourcesMap.begin(), _sourcesMap.end(),
+			[](SourcesMap::value_type& e) { return e.second.videoAreaWindowHandle > 0; });
+	if (_sourceUris.size() > sourceVideoAreasRealized) {
+		return;
+	}
+	_videoProcessor->start();
+	std::cout << "Video processor started" << std::endl;
 }
 
 void MainWindow::on_first_button_clicked()

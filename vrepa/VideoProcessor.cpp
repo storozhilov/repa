@@ -233,7 +233,13 @@ void VideoProcessor::on_bus_message_sync(const Glib::RefPtr<Gst::Message>& messa
 		}
 
 		// TODO: Thread-safety?
-		gst_video_overlay_set_window_handle(overlay, _mainWindow._sourcesMap[sourceHandle].videoAreaWindowHandle);
+		guintptr videoAreaWindowHandle = _mainWindow._sourcesMap[sourceHandle].videoAreaWindowHandle;
+		if (videoAreaWindowHandle == 0) {
+			std::ostringstream msg;
+			msg << "Video area for '" << element->get_name() << "' element is not realized yet";
+			throw std::runtime_error(msg.str());
+		}
+		gst_video_overlay_set_window_handle(overlay, videoAreaWindowHandle);
 		std::cout << "VideoProcessor::on_bus_message_sync(): Video overlay of '" << element->get_name() <<
 			"' element is attached to the source video area window handle" << std::endl;
 	}
@@ -246,8 +252,14 @@ bool VideoProcessor::on_bus_message(const Glib::RefPtr<Gst::Bus>&, const Glib::R
 			std::cout << std::endl << "End of stream" << std::endl;
 			return false;
 		case Gst::MESSAGE_ERROR:
-			std::cerr << "Error." << Glib::RefPtr<Gst::MessageError>::cast_static(message)->parse_debug() << std::endl;
-			return false;
+			{
+				Glib::RefPtr<Gst::Element> ms = Glib::RefPtr<Gst::Element>::cast_static(message->get_source());
+				Glib::RefPtr<Gst::MessageError> me = Glib::RefPtr<Gst::MessageError>::cast_static(message);
+				std::cerr << "VideoProcessor::on_bus_message(): Error message from '" <<
+					ms->get_name() << "' element: " << 
+					me->parse().what().c_str() << ", debugging info: " << me->parse_debug() << std::endl;
+				return false;
+			}
 		default:
 			break;
 	}

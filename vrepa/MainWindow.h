@@ -2,6 +2,7 @@
 #define __VREPA__MAIN_WINDOW_H
 
 #include "VideoProcessor.h"
+//#include "VideoArea.h"
 #include <gtkmm.h>
 #include <memory>
 #include <vector>
@@ -15,6 +16,7 @@ public:
 	MainWindow(SourceUris& sourceUris);
 protected:
 	struct SourceData {
+		//std::shared_ptr<VideoArea> videoArea;
 		std::shared_ptr<Gtk::DrawingArea> videoArea;
 		guintptr videoAreaWindowHandle;
 	};
@@ -39,9 +41,10 @@ private:
 	std::unique_ptr<VideoProcessor> _videoProcessor;
 
 	void on_main_video_area_realize();
-	void on_source_video_area_realize(VideoProcessor::SourceHandle);
+	void on_source_video_area_realize(VideoProcessor::SourceHandle sourceHandle);
 
 	friend class VideoProcessor;
+	//friend class VideoArea;
 };
 
 #endif
