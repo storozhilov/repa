@@ -256,8 +256,8 @@ bool VideoProcessor::on_bus_message(const Glib::RefPtr<Gst::Bus>&, const Glib::R
 				Glib::RefPtr<Gst::Element> ms = Glib::RefPtr<Gst::Element>::cast_static(message->get_source());
 				Glib::RefPtr<Gst::MessageError> me = Glib::RefPtr<Gst::MessageError>::cast_static(message);
 				std::cerr << "VideoProcessor::on_bus_message(): Error message from '" <<
-					ms->get_name() << "' element: " << 
-					me->parse().what().c_str() << ", debugging info: " << me->parse_debug() << std::endl;
+					ms->get_name() << "' element: '" << me->parse().what().c_str() <<
+					"', debugging info: " << me->parse_debug() << std::endl;
 				return false;
 			}
 		default:
