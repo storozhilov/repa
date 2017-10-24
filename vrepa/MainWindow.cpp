@@ -54,11 +54,23 @@ void MainWindow::on_main_video_area_realize()
 
 	for (auto uri : _sourceUris) {
 		auto h = _videoProcessor->addSource(uri.c_str());
-		_sourcesMap.insert(SourcesMap::value_type(h, Glib::RefPtr<Gtk::DrawingArea>()));
+		SourceData sourceData;
+		sourceData.videoArea.reset(new Gtk::DrawingArea());
+		_sourcesBox.pack_start(*sourceData.videoArea.get());
+		_sourcesMap.insert(SourcesMap::value_type(h, sourceData));
+		sourceData.videoArea->signal_realize().connect(sigc::bind(sigc::mem_fun(*this, &MainWindow::on_source_video_area_realize), h));
+		sourceData.videoArea->show();
 	}
 
 	_videoProcessor->start();
 	std::cout << "Video processor started" << std::endl;
+}
+
+void MainWindow::on_source_video_area_realize(VideoProcessor::SourceHandle sourceHandle)
+{
+	gulong xid = GDK_WINDOW_XID (_sourcesMap[sourceHandle].videoArea->get_window()->gobj());
+	_sourcesMap[sourceHandle].videoAreaWindowHandle = xid;
+	std::cout << "Source video area realized, handle: " << xid << std::endl;
 }
 
 void MainWindow::on_first_button_clicked()

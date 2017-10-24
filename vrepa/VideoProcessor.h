@@ -26,7 +26,11 @@ public:
 	SourceHandle addSource(const char * url);
 	void switchSource(const SourceHandle sourceHandle);
 private:
-	typedef std::map<SourceHandle, std::string> SourcesMap;
+	struct SourceData {
+		std::string inputSelectorPadName;
+		Glib::RefPtr<Gst::Element> sink;
+	};
+	typedef std::map<SourceHandle, SourceData> SourcesMap;
 
 	bool on_bus_message(const Glib::RefPtr<Gst::Bus>&, const Glib::RefPtr<Gst::Message>& message);
 	void on_bus_message_sync(const Glib::RefPtr<Gst::Message>& message);

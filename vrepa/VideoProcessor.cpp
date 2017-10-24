@@ -32,13 +32,6 @@ VideoProcessor::VideoProcessor(MainWindow& mainWindow) :
 	_pipeline->add(_inputSelector)->add(_mainSink);
 	_inputSelector->link(_mainSink);
 
-	/*Glib::RefPtr<Gst::Element> defaultSource = Gst::ElementFactory::create_element("videotestsrc");
-	if (!defaultSource) {
-		throw std::runtime_error("Error creating 'videotestsrc' element");
-	}
-	_pipeline->all(defaultSource);
-	defaultSource->link(_inputSelector);*/
-
 	_inputSelector->signal_pad_added().connect(sigc::mem_fun(*this, &VideoProcessor::on_selector_pad_added));
 }
 
@@ -59,29 +52,40 @@ void VideoProcessor::stop()
 
 VideoProcessor::SourceHandle VideoProcessor::addSource(const char * url)
 {
+	Glib::RefPtr<Gst::Element> tee = Gst::ElementFactory::create_element("tee");
+	if (!tee) {
+		throw std::runtime_error("Error creating 'tee' element");
+	}
+	Glib::RefPtr<Gst::Element> sourceSink = Gst::ElementFactory::create_element("vaapisink");
+	if (!sourceSink) {
+		throw std::runtime_error("Error creating 'vaapisink' element");
+	}
+
 	SourceHandle sourceHandle;
 	{
 		std::lock_guard<std::mutex> lock(_sourcesMapMutex);
 		sourceHandle = _sourcesMap.empty() ? 1 : _sourcesMap.rbegin()->first + 1;
-		_sourcesMap.insert(SourcesMap::value_type(sourceHandle, std::string()));
+		SourceData sourceData;
+		sourceData.sink = sourceSink;
+		_sourcesMap.insert(SourcesMap::value_type(sourceHandle, sourceData));
 	}
 
+	Glib::RefPtr<Gst::Element> src;
+
 	if (strcmp(url, SourceTestCircular) == 0) {
-		Glib::RefPtr<Gst::Element> videotestsrc = Gst::ElementFactory::create_element("videotestsrc");
-		if (!videotestsrc) {
+		src = Gst::ElementFactory::create_element("videotestsrc");
+		if (!src) {
 			throw std::runtime_error("Error creating 'videotestsrc' element");
 		}
-		videotestsrc->set_property("pattern", Gst::VIDEO_TEST_SRC_CIRCULAR);
-		_pipeline->add(videotestsrc);
-		videotestsrc->link(_inputSelector);
+		src->set_property("pattern", Gst::VIDEO_TEST_SRC_CIRCULAR);
+		_pipeline->add(src);
 	} else if (strcmp(url, SourceTestSmpte100) == 0) {
-		Glib::RefPtr<Gst::Element> videotestsrc = Gst::ElementFactory::create_element("videotestsrc");
-		if (!videotestsrc) {
+		src = Gst::ElementFactory::create_element("videotestsrc");
+		if (!src) {
 			throw std::runtime_error("Error creating 'videotestsrc' element");
 		}
-		videotestsrc->set_property("pattern", Gst::VIDEO_TEST_SRC_SMPTE100);
-		_pipeline->add(videotestsrc);
-		videotestsrc->link(_inputSelector);
+		src->set_property("pattern", Gst::VIDEO_TEST_SRC_SMPTE100);
+		_pipeline->add(src);
 	} else {
 		Glib::RefPtr<Gst::Element> rtspsrc = Gst::ElementFactory::create_element("rtspsrc");
 		if (!rtspsrc) {
@@ -96,17 +100,22 @@ VideoProcessor::SourceHandle VideoProcessor::addSource(const char * url)
 		if (!h264parse) {
 			throw std::runtime_error("Error creating 'h264parse' element");
 		}
-		Glib::RefPtr<Gst::Element> vaapidecode = Gst::ElementFactory::create_element("vaapidecode");
-		if (!vaapidecode) {
+		src = Gst::ElementFactory::create_element("vaapidecode");
+		if (!src) {
 			throw std::runtime_error("Error creating 'vaapidecode' element");
 		}
 
-		_pipeline->add(rtspsrc)->add(rtph264depay)->add(h264parse)->add(vaapidecode);
+		_pipeline->add(rtspsrc)->add(rtph264depay)->add(h264parse)->add(src);
 
 		rtspsrc->signal_pad_added().connect(sigc::bind(sigc::mem_fun(*this, &VideoProcessor::on_rtspsrc_pad_added),
 				rtph264depay, sourceHandle));
-		rtph264depay->link(h264parse)->link(vaapidecode)->link(_inputSelector);
+		rtph264depay->link(h264parse)->link(src);
 	}
+
+	src->link(_inputSelector);
+	//_pipeline->add(tee)->add(sourceSink);
+	//src->link(tee)->link(_inputSelector);
+	//src->link(sourceSink);
 
 	return sourceHandle;
 }
@@ -120,7 +129,7 @@ void VideoProcessor::switchSource(const SourceHandle sourceHandle)
 		SourcesMap::const_iterator pos = _sourcesMap.find(sourceHandle);
 		if (pos != _sourcesMap.end()) {
 			sourceFound = true;
-			selectorPadName = pos->second;
+			selectorPadName = pos->second.inputSelectorPadName;
 		}
 	}
 
@@ -163,9 +172,9 @@ void VideoProcessor::on_selector_pad_added(const Glib::RefPtr<Gst::Pad>& newPad)
 		std::lock_guard<std::mutex> lock(_sourcesMapMutex);
 		SourcesMap::iterator pos = _sourcesMap.begin();
 		while (pos != _sourcesMap.end()) {
-			if (pos->second.empty()) {
+			if (pos->second.inputSelectorPadName.empty()) {
 				sourceHandle = pos->first;
-				pos->second = newPad->get_name();
+				pos->second.inputSelectorPadName = newPad->get_name();
 				break;
 			}
 			++pos;
@@ -188,11 +197,16 @@ void VideoProcessor::on_bus_message_sync(const Glib::RefPtr<Gst::Message>& messa
 
 	GstVideoOverlay *overlay;
 	overlay = GST_VIDEO_OVERLAY (GST_MESSAGE_SRC (message->gobj()));
-	gst_video_overlay_set_window_handle (overlay, _mainWindow._mainVideoAreaWindowHandle);
 
-	std::cout << "VideoProcessor::on_bus_message_sync(): Video overlay of '" <<
-		Glib::RefPtr<Gst::Element>::cast_dynamic(message->get_source())->get_name() <<
-		"' element is attached to the main video area window handle" << std::endl;
+	if (Glib::RefPtr<Gst::Element>::cast_dynamic(message->get_source()) == _mainSink) {
+		gst_video_overlay_set_window_handle (overlay, _mainWindow._mainVideoAreaWindowHandle);
+
+		std::cout << "VideoProcessor::on_bus_message_sync(): Video overlay of '" <<
+			Glib::RefPtr<Gst::Element>::cast_dynamic(message->get_source())->get_name() <<
+			"' element is attached to the main video area window handle" << std::endl;
+	} else {
+		std::cout << "VideoProcessor::on_bus_message_sync(): Foobar!!!!!!!!!" << std::endl;
+	}
 }
 
 bool VideoProcessor::on_bus_message(const Glib::RefPtr<Gst::Bus>&, const Glib::RefPtr<Gst::Message>& message)

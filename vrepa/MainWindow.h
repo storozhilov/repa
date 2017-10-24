@@ -14,7 +14,12 @@ public:
 
 	MainWindow(SourceUris& sourceUris);
 protected:
-	typedef std::map<VideoProcessor::SourceHandle, Glib::RefPtr<Gtk::DrawingArea>> SourcesMap;
+	struct SourceData {
+		std::shared_ptr<Gtk::DrawingArea> videoArea;
+		guintptr videoAreaWindowHandle;
+	};
+
+	typedef std::map<VideoProcessor::SourceHandle, SourceData> SourcesMap;
 
 	Gtk::VBox _vbox;
 	Gtk::DrawingArea _mainVideoArea;
@@ -34,6 +39,7 @@ private:
 	std::unique_ptr<VideoProcessor> _videoProcessor;
 
 	void on_main_video_area_realize();
+	void on_source_video_area_realize(VideoProcessor::SourceHandle);
 
 	friend class VideoProcessor;
 };
