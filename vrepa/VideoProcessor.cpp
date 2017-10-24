@@ -161,8 +161,8 @@ void VideoProcessor::on_rtspsrc_pad_added(const Glib::RefPtr<Gst::Pad>& newPad, 
 		throw std::runtime_error(msg.str());
 	}
 
-	std::cout << "New source pad added to 'rtph264depay' element for " << sourceHandle << 
-		" source: " << newPad->get_name() << std::endl;
+	std::cout << "New source pad '" << newPad->get_name() << "' added to '" << newPad->get_parent_element()->get_name() <<
+		"' element for " << sourceHandle << " source" << std::endl;
 }
 
 void VideoProcessor::on_selector_pad_added(const Glib::RefPtr<Gst::Pad>& newPad)
@@ -180,8 +180,8 @@ void VideoProcessor::on_selector_pad_added(const Glib::RefPtr<Gst::Pad>& newPad)
 			++pos;
 		}
 	}
-	std::cout << "New sink pad added to 'input-selector' element for " <<
-		sourceHandle << " source: " << newPad->get_name() << std::endl;
+	std::cout << "New sink pad added to '" << newPad->get_parent_element()->get_name() <<
+		"' element for " << sourceHandle << " source: " << newPad->get_name() << std::endl;
 }
 
 void VideoProcessor::on_bus_message_sync(const Glib::RefPtr<Gst::Message>& message)
