@@ -2,7 +2,6 @@
 #define __VREPA__MAIN_WINDOW_H
 
 #include "VideoProcessor.h"
-//#include "VideoArea.h"
 #include <gtkmm.h>
 #include <memory>
 #include <vector>
@@ -16,8 +15,6 @@ public:
 	MainWindow(SourceUris& sourceUris);
 protected:
 	struct SourceData {
-		//std::shared_ptr<Gtk::EventBox> eventBox;
-		//std::shared_ptr<VideoArea> videoArea;
 		std::shared_ptr<Gtk::DrawingArea> videoArea;
 		guintptr videoAreaWindowHandle;
 	};
@@ -46,7 +43,6 @@ private:
 	bool on_source_video_area_button_press(GdkEventButton * event, VideoProcessor::SourceHandle sourceHandle);
 
 	friend class VideoProcessor;
-	//friend class VideoArea;
 };
 
 #endif
