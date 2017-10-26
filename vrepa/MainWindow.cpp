@@ -30,6 +30,8 @@ MainWindow::MainWindow(SourceUris& sourceUris) :
 	_mainVideoArea.signal_realize().connect(sigc::mem_fun(*this, &MainWindow::on_main_video_area_realize));
 
 	show_all_children();
+
+	resize(1024, 768);
 }
 
 bool MainWindow::on_delete_event(GdkEventAny * event)
@@ -54,16 +56,42 @@ void MainWindow::on_main_video_area_realize()
 	std::cout << "Video processor created" << std::endl;
 
 	for (auto uri : _sourceUris) {
-		auto h = _videoProcessor->addSource(uri.c_str());
+		auto sourceHandle = _videoProcessor->addSource(uri.c_str());
 		SourceData sourceData;
+/*
+		sourceData.eventBox.reset(new Gtk::EventBox());
+		_sourcesBox.pack_start(*sourceData.eventBox.get(), Gtk::PACK_SHRINK);
+
 		sourceData.videoArea.reset(new Gtk::DrawingArea());
-		//sourceData.videoArea.reset(new VideoArea(*this));
-		_sourcesBox.pack_start(*sourceData.videoArea.get(), Gtk::PACK_SHRINK);
-		_sourcesMap.insert(SourcesMap::value_type(h, sourceData));
 		sourceData.videoArea->set_size_request(200, 150);
-		sourceData.videoArea->signal_realize().connect(sigc::bind(sigc::mem_fun(*this, &MainWindow::on_source_video_area_realize), h));
+
+		sourceData.eventBox->add(*sourceData.videoArea.get());
+		sourceData.eventBox->set_events(Gdk::BUTTON_PRESS_MASK);
+		sourceData.eventBox->signal_button_press_event().connect(
+				sigc::bind(sigc::mem_fun(*this, &MainWindow::on_source_video_area_button_press), sourceHandle));
+
+		_sourcesMap.insert(SourcesMap::value_type(sourceHandle, sourceData));
+		//sourceData.videoArea->set_events(Gdk::BUTTON_PRESS_MASK);
+		//sourceData.videoArea->signal_realize().connect(
+		//		sigc::bind(sigc::mem_fun(*this, &MainWindow::on_source_video_area_realize), sourceHandle));
+*/
+		//sourceData.videoArea.reset(new VideoArea(*this));
+		sourceData.videoArea.reset(new Gtk::DrawingArea());
+		sourceData.videoArea->set_events(Gdk::BUTTON_PRESS_MASK);
+		sourceData.videoArea->signal_button_press_event().connect(
+				sigc::bind(sigc::mem_fun(*this, &MainWindow::on_source_video_area_button_press), sourceHandle));
+		//sourceData.videoArea->signal_realize().connect(
+		//		sigc::bind(sigc::mem_fun(*this, &MainWindow::on_source_video_area_realize), sourceHandle));
+		sourceData.videoArea->set_size_request(200, 150);
+		sourceData.videoArea->signal_realize().connect(
+				sigc::bind(sigc::mem_fun(*this, &MainWindow::on_source_video_area_realize), sourceHandle));
+		_sourcesBox.pack_start(*sourceData.videoArea.get(), Gtk::PACK_SHRINK);
+
+		_sourcesMap.insert(SourcesMap::value_type(sourceHandle, sourceData));
+
 		sourceData.videoArea->show();
 	}
+	show_all_children();
 }
 
 void MainWindow::on_source_video_area_realize(VideoProcessor::SourceHandle sourceHandle)
@@ -80,6 +108,13 @@ void MainWindow::on_source_video_area_realize(VideoProcessor::SourceHandle sourc
 	}
 	_videoProcessor->start();
 	std::cout << "Video processor started" << std::endl;
+}
+
+bool MainWindow::on_source_video_area_button_press(GdkEventButton * event, VideoProcessor::SourceHandle sourceHandle)
+{
+	std::cout << "Video area clicked for " << sourceHandle << " source" << std::endl;
+	_videoProcessor->switchSource(sourceHandle);
+	return true;
 }
 
 void MainWindow::on_first_button_clicked()

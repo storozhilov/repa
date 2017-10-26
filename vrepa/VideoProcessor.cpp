@@ -24,9 +24,13 @@ VideoProcessor::VideoProcessor(MainWindow& mainWindow) :
 	if (!_inputSelector) {
 		throw std::runtime_error("Error creating 'input-selector' element");
 	}
-	_mainSink = Gst::ElementFactory::create_element("vaapisink");
+	/*_mainSink = Gst::ElementFactory::create_element("vaapisink");
 	if (!_mainSink) {
 		throw std::runtime_error("Error creating 'vaapisink' element");
+	}*/
+	_mainSink = Gst::ElementFactory::create_element("xvimagesink");
+	if (!_mainSink) {
+		throw std::runtime_error("Error creating 'xvimagesink' element");
 	}
 
 	_pipeline->add(_inputSelector)->add(_mainSink);
@@ -64,9 +68,13 @@ VideoProcessor::SourceHandle VideoProcessor::addSource(const char * url)
 	if (!sourceSinkQueue) {
 		throw std::runtime_error("Error creating 'queue' element");
 	}
-	Glib::RefPtr<Gst::Element> sourceSink = Gst::ElementFactory::create_element("vaapisink");
+	/*Glib::RefPtr<Gst::Element> sourceSink = Gst::ElementFactory::create_element("vaapisink");
 	if (!sourceSink) {
 		throw std::runtime_error("Error creating 'vaapisink' element");
+	}*/
+	Glib::RefPtr<Gst::Element> sourceSink = Gst::ElementFactory::create_element("xvimagesink");
+	if (!sourceSink) {
+		throw std::runtime_error("Error creating 'xvimagesink' element");
 	}
 
 	SourceHandle sourceHandle;

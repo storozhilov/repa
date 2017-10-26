@@ -16,6 +16,7 @@ public:
 	MainWindow(SourceUris& sourceUris);
 protected:
 	struct SourceData {
+		//std::shared_ptr<Gtk::EventBox> eventBox;
 		//std::shared_ptr<VideoArea> videoArea;
 		std::shared_ptr<Gtk::DrawingArea> videoArea;
 		guintptr videoAreaWindowHandle;
@@ -42,6 +43,7 @@ private:
 
 	void on_main_video_area_realize();
 	void on_source_video_area_realize(VideoProcessor::SourceHandle sourceHandle);
+	bool on_source_video_area_button_press(GdkEventButton * event, VideoProcessor::SourceHandle sourceHandle);
 
 	friend class VideoProcessor;
 	//friend class VideoArea;
