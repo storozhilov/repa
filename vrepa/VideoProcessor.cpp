@@ -24,9 +24,13 @@ VideoProcessor::VideoProcessor(MainWindow& mainWindow) :
 	if (!_inputSelector) {
 		throw std::runtime_error("Error creating 'input-selector' element");
 	}
-	_mainSink = Gst::ElementFactory::create_element("xvimagesink");
+/*	_mainSink = Gst::ElementFactory::create_element("xvimagesink");
 	if (!_mainSink) {
 		throw std::runtime_error("Error creating 'xvimagesink' element");
+	}*/
+	_mainSink = Gst::ElementFactory::create_element("vaapisink");
+	if (!_mainSink) {
+		throw std::runtime_error("Error creating 'vaapisink' element");
 	}
 
 	_pipeline->add(_inputSelector)->add(_mainSink);
@@ -47,6 +51,9 @@ VideoProcessor::~VideoProcessor()
 
 void VideoProcessor::stop()
 {
+	_pipeline->send_event(Gst::EventEos::create());
+	// Await for file-sinks to recieve EOS?
+	sleep(2);
 	_pipeline->set_state(Gst::STATE_NULL);
 }
 
@@ -108,16 +115,43 @@ VideoProcessor::SourceHandle VideoProcessor::addSource(const char * url)
 		if (!h264parse) {
 			throw std::runtime_error("Error creating 'h264parse' element");
 		}
+
+		Glib::RefPtr<Gst::Element> inputTee = Gst::ElementFactory::create_element("tee");
+		if (!inputTee) {
+			throw std::runtime_error("Error creating 'tee' element");
+		}
+		Glib::RefPtr<Gst::Element> decoderQueue = Gst::ElementFactory::create_element("queue");
+		if (!decoderQueue) {
+			throw std::runtime_error("Error creating 'queue' element");
+		}
+		Glib::RefPtr<Gst::Element> fileQueue = Gst::ElementFactory::create_element("queue");
+		if (!fileQueue) {
+			throw std::runtime_error("Error creating 'queue' element");
+		}
+		Glib::RefPtr<Gst::Element> muxer = Gst::ElementFactory::create_element("mp4mux");
+		if (!muxer) {
+			throw std::runtime_error("Error creating 'mp4mux' element");
+		}
+		Glib::RefPtr<Gst::Element> fileSink = Gst::ElementFactory::create_element("filesink");
+		if (!fileSink) {
+			throw std::runtime_error("Error creating 'filesink' element");
+		}
+		std::ostringstream filename;
+		filename << "video_cam_" << sourceHandle << ".mp4";
+		fileSink->set_property("location", Glib::ustring(filename.str().c_str()));
+
 		src = Gst::ElementFactory::create_element("vaapidecode");
 		if (!src) {
 			throw std::runtime_error("Error creating 'vaapidecode' element");
 		}
 
 		_pipeline->add(rtspsrc)->add(rtph264depay)->add(h264parse)->add(src);
+		_pipeline->add(inputTee)->add(decoderQueue)->add(fileQueue)->add(muxer)->add(fileSink);
 
 		rtspsrc->signal_pad_added().connect(sigc::bind(sigc::mem_fun(*this, &VideoProcessor::on_rtspsrc_pad_added),
 				rtph264depay, sourceHandle));
-		rtph264depay->link(h264parse)->link(src);
+		rtph264depay->link(h264parse)->link(inputTee)->link(decoderQueue)->link(src);
+		inputTee->link(fileQueue)->link(muxer)->link(fileSink);
 	}
 
 	_pipeline->add(tee)->add(inputSelectorQueue)->add(sourceSinkQueue)->add(sourceSink);
