@@ -23,7 +23,6 @@ MainWindow::MainWindow(SourceUris& sourceUris) :
 	_vbox.pack_start(_sourcesBox, Gtk::PACK_SHRINK);
 	_vbox.pack_start(_buttonBox, Gtk::PACK_SHRINK);
 
-	_recordButton.set_use_markup(true);
 	_buttonBox.pack_start(_recordButton, Gtk::PACK_SHRINK);
 	_buttonBox.pack_start(_streamingButton, Gtk::PACK_SHRINK);
 
