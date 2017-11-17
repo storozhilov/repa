@@ -8,24 +8,27 @@ MainWindow::MainWindow(SourceUris& sourceUris) :
 	_vbox(false, 6),
 	_mainVideoArea(),
 	_sourcesBox(false, 6),
-	_buttonBox(),
-	_firstSourceButton("First"),
-	_secondSourceButton("Second"),
+	_buttonBox(Gtk::BUTTONBOX_START, 6),
+	_recordButton("Start recording"),
+	_streamingButton("Start streaming"),
 	_sourcesMap(),
 	_sourceUris(sourceUris),
 	_mainVideoAreaWindowHandle(0),
-	_videoProcessor()
+	_videoProcessor(),
+	_isRecording(false),
+	_isStreaming(false)
 {
 	add(_vbox);
 	_vbox.pack_start(_mainVideoArea, Gtk::PACK_EXPAND_WIDGET);
 	_vbox.pack_start(_sourcesBox, Gtk::PACK_SHRINK);
 	_vbox.pack_start(_buttonBox, Gtk::PACK_SHRINK);
 
-	_buttonBox.pack_start(_firstSourceButton);
-	_buttonBox.pack_start(_secondSourceButton);
+	_recordButton.set_use_markup(true);
+	_buttonBox.pack_start(_recordButton, Gtk::PACK_SHRINK);
+	_buttonBox.pack_start(_streamingButton, Gtk::PACK_SHRINK);
 
-	_firstSourceButton.signal_clicked().connect(sigc::mem_fun(*this, &MainWindow::on_first_button_clicked));
-	_secondSourceButton.signal_clicked().connect(sigc::mem_fun(*this, &MainWindow::on_second_button_clicked));
+	_recordButton.signal_clicked().connect(sigc::mem_fun(*this, &MainWindow::on_record_button_clicked));
+	_streamingButton.signal_clicked().connect(sigc::mem_fun(*this, &MainWindow::on_second_button_clicked));
 
 	_mainVideoArea.signal_realize().connect(sigc::mem_fun(*this, &MainWindow::on_main_video_area_realize));
 
@@ -98,12 +101,26 @@ bool MainWindow::on_source_video_area_button_press(GdkEventButton * event, Video
 	return true;
 }
 
-void MainWindow::on_first_button_clicked()
+void MainWindow::on_record_button_clicked()
 {
-	_videoProcessor->switchSource(_sourcesMap.begin()->first);
+	_isRecording = !_isRecording;
+	if (_isRecording) {
+		_recordButton.set_label("Stop recording");
+		std::cout << "<b>Recording started</b>" << std::endl;
+	} else {
+		_recordButton.set_label("Start recording");
+		std::cout << "Recording stopped" << std::endl;
+	}
 }
 
 void MainWindow::on_second_button_clicked()
 {
-	_videoProcessor->switchSource(_sourcesMap.rbegin()->first);
+	_isStreaming = !_isStreaming;
+	if (_isStreaming) {
+		_streamingButton.set_label("Stop streaming");
+		std::cout << "Streaming started" << std::endl;
+	} else {
+		_streamingButton.set_label("Start streaming");
+		std::cout << "Streaming stopped" << std::endl;
+	}
 }
