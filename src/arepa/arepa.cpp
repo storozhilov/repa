@@ -7,7 +7,7 @@
 #include <boost/thread/thread.hpp>
 #include <boost/program_options.hpp>
 
-#include "MultitrackRecorder.h"
+#include "AudioProcessor.h"
 
 namespace
 {
@@ -44,7 +44,7 @@ int main(int argc, char * argv[]) {
 	std::signal(SIGTERM, signal_handler);
 	std::signal(SIGINT, signal_handler);
 
-	MultitrackRecorder recorder;
+	AudioProcessor recorder;
 	recorder.start(location, device);
 	while (!static_cast<bool>(stopped)) {
 		boost::this_thread::sleep(boost::posix_time::milliseconds(100));
