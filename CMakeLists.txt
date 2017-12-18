@@ -4,5 +4,5 @@ add_subdirectory(src)
 add_subdirectory(tests)
 
 enable_testing()
-add_test(NAME test_repa
-	COMMAND ${CMAKE_CURRENT_BINARY_DIR}/tests/test_repa)
+add_test(NAME test_arepa
+	COMMAND ${CMAKE_CURRENT_BINARY_DIR}/tests/test_arepa)
