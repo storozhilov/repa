@@ -49,7 +49,6 @@ private:
 
 }
 
-
 AudioProcessor::AudioProcessor() :
 	_shouldRun(),
 	_captureThread(),
