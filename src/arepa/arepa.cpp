@@ -44,7 +44,7 @@ int main(int argc, char * argv[]) {
 	std::signal(SIGTERM, signal_handler);
 	std::signal(SIGINT, signal_handler);
 
-	AudioProcessor recorder;
+	AudioProcessor recorder(device.c_str());
 	recorder.start(location, device);
 	while (!static_cast<bool>(stopped)) {
 		boost::this_thread::sleep(boost::posix_time::milliseconds(100));

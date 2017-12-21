@@ -18,7 +18,8 @@
 class AudioProcessor
 {
 public:
-	AudioProcessor();
+	AudioProcessor(const char * device);
+	~AudioProcessor();
 
 	void start(const std::string& location, const std::string& device);
 	void stop();
@@ -63,6 +64,7 @@ private:
 
 	Records _records;
 
+	const std::string _device;
 	boost::atomic<snd_pcm_format_t> _format;
 	boost::atomic<unsigned int> _rate;
 	boost::atomic<unsigned int> _bytesPerSample;

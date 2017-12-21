@@ -49,7 +49,8 @@ private:
 
 }
 
-AudioProcessor::AudioProcessor() :
+AudioProcessor::AudioProcessor(const char * device) :
+	_device(device),
 	_shouldRun(),
 	_captureThread(),
 	_recordThread(),
@@ -94,6 +95,10 @@ AudioProcessor::AudioProcessor() :
 	for (size_t i = 0; i <= SND_PCM_STATE_LAST; i++) {
 		std::cout << " - " << snd_pcm_state_name(static_cast<snd_pcm_state_t>(i)) << std::endl;
 	}
+}
+
+AudioProcessor::~AudioProcessor()
+{
 }
 
 void AudioProcessor::start(const std::string& location, const std::string& device)
