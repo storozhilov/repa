@@ -21,8 +21,9 @@ public:
 	AudioProcessor(const char * device);
 	~AudioProcessor();
 
-	void start(const std::string& location, const std::string& device);
-	void stop();
+	void start(const std::string& location, const std::string& device) {}
+	void startRecord(const std::string& location, const std::string& filenameSuffix = std::string());
+	void stop() {}
 private:
 	typedef std::vector<char> Buffer;
 
@@ -61,10 +62,8 @@ private:
 	};
 
 	void runCapture();
-	void runRecord();
 	void runCapturePostProcessing();
 
-	boost::atomic<bool> _shouldRun;
 	boost::thread _captureThread;
 	boost::thread _capturePostProcessingThread;
 
@@ -83,8 +82,18 @@ private:
 
 	Buffer _captureRingBuffer;
 
+	enum State {
+		IdleState,
+		CaptureStartingState,
+		CaptureState,
+		RecordStartingState,
+		RecordState,
+		RecordStoppingState
+	};
+
 	boost::condition_variable _captureCond;
 	boost::mutex _captureMutex;
+	State _state;
 	std::size_t _captureOffset;
 	std::size_t _ringsCaptured;
 	std::size_t _recordOffset;
