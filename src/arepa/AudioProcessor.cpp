@@ -53,7 +53,7 @@ AudioProcessor::AudioProcessor(const char * device) :
 	_device(device),
 	_shouldRun(),
 	_captureThread(),
-	_recordThread(),
+	_capturePostProcessingThread(),
 	_handle(),
 	_captureChannels(),
 	_records(),
@@ -208,10 +208,28 @@ AudioProcessor::AudioProcessor(const char * device) :
 	for (std::size_t i = 0; i < _captureChannels.size(); ++i) {
 		_captureChannels[i] = new CaptureChannel();
 	}
+
+	// Starting capture & record threads
+	_shouldRun.store(true);
+	_captureThread = boost::thread(boost::bind(&AudioProcessor::runCapture, this));
+	_capturePostProcessingThread = boost::thread(boost::bind(&AudioProcessor::runCapturePostProcessing, this));
 }
 
 AudioProcessor::~AudioProcessor()
 {
+	// Stopping threads
+	_shouldRun.store(false);
+
+	boost::unique_lock<boost::mutex> lock(_captureMutex);
+	_captureCond.notify_all();
+	lock.unlock();
+
+	_captureThread.join();
+	_capturePostProcessingThread.join();
+
+	// Capture ring buffer disposal (not needed)
+	//Buffer().swap(_captureRingBuffer);
+
 	if (_handle > 0) {
 		int rc = snd_pcm_drain(_handle);
 		if (rc < 0) {
@@ -377,7 +395,7 @@ void AudioProcessor::start(const std::string& location, const std::string& devic
 	// Starting capture & record threads
 	_shouldRun.store(true);
 	_captureThread = boost::thread(boost::bind(&AudioProcessor::runCapture, this));
-	_recordThread = boost::thread(boost::bind(&AudioProcessor::runRecord, this));
+	_capturePostProcessingThread = boost::thread(boost::bind(&AudioProcessor::runRecord, this));
 }
 
 void AudioProcessor::stop()
@@ -389,14 +407,14 @@ void AudioProcessor::stop()
 	lock.unlock();
 
 	_captureThread.join();
-	_recordThread.join();
+	_capturePostProcessingThread.join();
 
 	Buffer().swap(_captureRingBuffer);	// Capture ring buffer disposal
 }
 
 void AudioProcessor::runCapture()
 {
-	AlsaCleaner alsaCleaner(_handle);
+	//AlsaCleaner alsaCleaner(_handle);
 
 	std::size_t periodSize = _periodSize.load();
 	std::size_t periodBufferSize = _periodBufferSize.load();
@@ -444,6 +462,101 @@ void AudioProcessor::runCapture()
 		recordOffset = _recordOffset;
 		ringsRecorded = _ringsRecorded;
 		_captureCond.notify_all();
+	}
+}
+
+void AudioProcessor::runCapturePostProcessing()
+{
+	snd_pcm_format_t format = _format.load();
+	unsigned int bytesPerSample = _bytesPerSample.load();
+	unsigned int channels = _channels.load();
+	unsigned int periodSize = _periodSize.load();
+	unsigned int periodBufferSize = _periodBufferSize.load();
+
+	Buffer recordBuffer(periodBufferSize);
+
+	std::size_t captureOffset = 0U;
+	std::size_t ringsCaptured = 0U;
+	std::size_t recordOffset = 0U;
+	std::size_t ringsRecorded = 0U;
+
+	while (_shouldRun.load()) {
+		// Waiting for data to be captured
+		std::size_t absoluteRecordOffset = ringsRecorded * PeriodsInBuffer + recordOffset;
+
+		boost::unique_lock<boost::mutex> lock(_captureMutex);
+		_recordOffset = recordOffset;
+		_ringsRecorded = ringsRecorded;
+		while (absoluteRecordOffset >= (_ringsCaptured * PeriodsInBuffer + _captureOffset)) {
+			_captureCond.wait(lock);
+			if (!_shouldRun.load()) {
+				break;
+			}
+		}
+		captureOffset = _captureOffset;
+		ringsCaptured = _ringsCaptured;
+		lock.unlock();
+
+		std::size_t absoluteCaptureOffset = ringsCaptured * PeriodsInBuffer + captureOffset;
+		if (absoluteRecordOffset >= absoluteCaptureOffset) {
+			continue;
+		}
+
+		// Writing captured data
+		while ((ringsRecorded * PeriodsInBuffer + recordOffset) < absoluteCaptureOffset) {
+			// Copying data to record buffer
+			for (std::size_t i = 0; i < periodBufferSize; i += bytesPerSample) {
+				std::size_t frame = i / bytesPerSample / channels;
+				std::size_t channel = i / bytesPerSample % channels;
+				std::size_t j = channel * _periodSize * bytesPerSample + frame * bytesPerSample;
+
+				memcpy(&recordBuffer[j], &_captureRingBuffer[recordOffset * periodBufferSize + i], bytesPerSample);
+			}
+
+			for (std::size_t i = 0U; i < channels; ++i) {
+				// TODO: Scanning & updating level
+
+				// Savind record buffer data to WAV file
+				sf_count_t itemsToWrite = 0;
+				sf_count_t itemsWritten = 0;
+
+				char * buf = &recordBuffer[i * _periodSize * bytesPerSample];
+				std::size_t size = _periodSize * bytesPerSample;
+
+/*				switch (format) {
+					case SND_PCM_FORMAT_S16_LE:
+						itemsToWrite = size / 2;
+						itemsWritten = _records[i + 1]->write(reinterpret_cast<short *>(buf), itemsToWrite);
+						break;
+					case SND_PCM_FORMAT_S32_LE:
+						itemsToWrite = size / 4;
+						itemsWritten = _records[i + 1]->write(reinterpret_cast<int *>(buf), itemsToWrite);
+						break;
+					case SND_PCM_FORMAT_FLOAT_LE:
+						itemsToWrite = size / 4;
+						itemsWritten = _records[i + 1]->write(reinterpret_cast<float *>(buf), itemsToWrite);
+						break;
+					default:
+						std::ostringstream msg;
+						msg << "WAV-file format is not supported: " << snd_pcm_format_name(format) <<
+							", " << snd_pcm_format_description(format);
+						throw std::runtime_error(msg.str());
+				}
+
+				if (itemsWritten != itemsToWrite) {
+					std::ostringstream msg;
+					msg << "Unconsistent written items count: " << itemsWritten << '/' << itemsToWrite;
+					throw std::runtime_error(msg.str());
+				}*/
+			}
+
+			std::cout << '+';
+
+			recordOffset = (recordOffset + 1) % PeriodsInBuffer;
+			if (recordOffset == 0U) {
+				++ringsRecorded;
+			}
+		}
 	}
 }
 

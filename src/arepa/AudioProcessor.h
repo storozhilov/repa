@@ -62,10 +62,11 @@ private:
 
 	void runCapture();
 	void runRecord();
+	void runCapturePostProcessing();
 
 	boost::atomic<bool> _shouldRun;
 	boost::thread _captureThread;
-	boost::thread _recordThread;
+	boost::thread _capturePostProcessingThread;
 
 	snd_pcm_t * _handle;
 
