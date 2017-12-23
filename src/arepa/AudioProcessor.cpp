@@ -55,6 +55,7 @@ AudioProcessor::AudioProcessor(const char * device) :
 	_captureThread(),
 	_recordThread(),
 	_handle(),
+	_captureChannels(),
 	_records(),
 	_format(),
 	_rate(),
@@ -95,10 +96,140 @@ AudioProcessor::AudioProcessor(const char * device) :
 	for (size_t i = 0; i <= SND_PCM_STATE_LAST; i++) {
 		std::cout << " - " << snd_pcm_state_name(static_cast<snd_pcm_state_t>(i)) << std::endl;
 	}
+
+	// ALSA intialization
+	int rc = snd_pcm_open(&_handle, _device.c_str(), SND_PCM_STREAM_CAPTURE, 0);
+	if (rc < 0) {
+		std::ostringstream msg;
+		msg << "Opening '" << _device << "' PCM device error: " << snd_strerror(rc);
+		throw std::runtime_error(msg.str());
+	}
+
+	snd_pcm_hw_params_t * params;
+	snd_pcm_hw_params_alloca(&params);
+	snd_pcm_hw_params_any(_handle, params);
+
+	rc = snd_pcm_hw_params_set_access(_handle, params, SND_PCM_ACCESS_RW_INTERLEAVED);
+	if (rc < 0) {
+		std::ostringstream msg;
+		msg << "Restricting access type error: " << snd_strerror(rc);
+		throw std::runtime_error(msg.str());
+	}
+
+	rc = snd_pcm_hw_params_set_format(_handle, params, SND_PCM_FORMAT_S16_LE);
+	if (rc < 0) {
+		std::cerr << "WARNING: Requesting format error: " << snd_strerror(rc) <<std::endl;
+	}
+
+	unsigned int val = 44100;
+	int dir;
+	rc = snd_pcm_hw_params_set_rate_near(_handle, params, &val, &dir);
+	if (rc < 0) {
+		std::ostringstream msg;
+		msg << "Restricting sample rate error: " << snd_strerror(rc);
+		throw std::runtime_error(msg.str());
+	}
+
+	rc = snd_pcm_hw_params(_handle, params);
+	if (rc < 0) {
+		std::ostringstream msg;
+		msg << "Setting H/W parameters error: " << snd_strerror(rc);
+		throw std::runtime_error(msg.str());
+	}
+
+	std::cout << "PCM handle name: " << snd_pcm_name(_handle) << std::endl <<
+		"PCM state: " << snd_pcm_state_name(snd_pcm_state(_handle)) << std::endl;
+
+	snd_pcm_access_t access;
+	snd_pcm_hw_params_get_access(params, &access);
+	std::cout << "Access type: " << snd_pcm_access_name(access) << std::endl;
+
+	snd_pcm_format_t format;
+	snd_pcm_hw_params_get_format(params, &format);
+	_format.store(format);
+	std::cout << "Format: " << snd_pcm_format_name(format) << ", " << snd_pcm_format_description(format) << std::endl;
+
+	snd_pcm_subformat_t subformat;
+	snd_pcm_hw_params_get_subformat(params, &subformat);
+	std::cout << "Subformat: " << snd_pcm_subformat_name(subformat) << ", " << snd_pcm_subformat_description(subformat) << std::endl;
+
+	unsigned int rate;
+	snd_pcm_hw_params_get_rate(params, &rate, &dir);
+	_rate.store(rate);
+	std::cout << "Sample rate: " << rate << " bps" << std::endl;
+
+	unsigned int channels;
+	snd_pcm_hw_params_get_channels(params, &channels);
+	_channels.store(channels);
+	std::cout << "Channels: " << channels << std::endl;
+
+	unsigned int periodTime;
+	snd_pcm_hw_params_get_period_time(params, &periodTime, &dir);
+	std::cout << "Period time: " << periodTime << " us" << std::endl;
+
+	snd_pcm_uframes_t periodSize;
+	snd_pcm_hw_params_get_period_size(params, &periodSize, &dir);
+	_periodSize.store(periodSize);
+	std::cout << "Period size: " << periodSize << " frames" << std::endl;
+
+	unsigned int bufferTime;
+	snd_pcm_hw_params_get_buffer_time(params, &bufferTime, &dir);
+	std::cout << "Buffer time: " << bufferTime << " us" << std::endl;
+
+	// TODO: Correct bytes per sample calculation
+	std::size_t bytesPerSample = 2;
+	if (format == SND_PCM_FORMAT_S32_LE) {
+		bytesPerSample = 4;
+	} else if (format != SND_PCM_FORMAT_S16_LE) {
+		std::ostringstream msg;
+		msg << "Unsupported format: " << snd_pcm_format_name(format) << '(' <<
+			snd_pcm_format_description(format) << ')';
+		throw std::runtime_error(msg.str());
+	}
+	_bytesPerSample.store(bytesPerSample);
+	std::cout << "Bytes per sample: " << bytesPerSample << std::endl;
+
+	std::size_t periodBufferSize = periodSize * channels * bytesPerSample;
+	_periodBufferSize.store(periodBufferSize);
+	std::cout << "Period buffer size: " << periodBufferSize << std::endl;
+
+	std::size_t bufferSize = periodBufferSize * PeriodsInBuffer;
+	std::cout << "Allocating " << (bufferSize / 1024U) << " KB capture ring buffer for " << PeriodsInBuffer <<
+		" periods (~" << (periodTime * PeriodsInBuffer / 1000000.0) << " sec)" << std::endl;
+	_captureRingBuffer.resize(bufferSize);
+
+	_captureOffset = 0U;
+	_ringsCaptured = 0U;
+	_recordOffset = 0U;
+	_ringsRecorded = 0U;
+
+	// Recording channels initialization
+	_captureChannels.resize(channels);
+	for (std::size_t i = 0; i < _captureChannels.size(); ++i) {
+		_captureChannels[i] = new CaptureChannel();
+	}
 }
 
 AudioProcessor::~AudioProcessor()
 {
+	if (_handle > 0) {
+		int rc = snd_pcm_drain(_handle);
+		if (rc < 0) {
+			std::ostringstream msg;
+			msg << "Stopping '" << _device << "' PCM device error: " << snd_strerror(rc);
+			throw std::runtime_error(msg.str());
+		}
+		rc = snd_pcm_close(_handle);
+		if (rc < 0) {
+			std::ostringstream msg;
+			msg << "Closing '" << _device << "' PCM device error: " << snd_strerror(rc);
+			throw std::runtime_error(msg.str());
+		}
+	}
+
+	for (std::size_t i = 0; i < _captureChannels.size(); ++i) {
+		delete _captureChannels[i];
+	}
 }
 
 void AudioProcessor::start(const std::string& location, const std::string& device)

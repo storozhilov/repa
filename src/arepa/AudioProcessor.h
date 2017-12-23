@@ -25,7 +25,14 @@ public:
 	void stop();
 private:
 	typedef std::vector<char> Buffer;
-	typedef std::queue<Buffer> CaptureQueue;
+
+	struct CaptureChannel
+	{
+		boost::atomic<unsigned int> level;	// TODO: Maybe use float for percentage
+		SndfileHandle * file;
+	};
+	typedef std::vector<CaptureChannel *> CaptureChannels;
+
 	typedef std::map<std::size_t, SndfileHandle *> Records;
 
 	class RecordsCleaner {
@@ -62,6 +69,7 @@ private:
 
 	snd_pcm_t * _handle;
 
+	CaptureChannels _captureChannels;
 	Records _records;
 
 	const std::string _device;

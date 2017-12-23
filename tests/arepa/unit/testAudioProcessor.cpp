@@ -7,7 +7,9 @@ class AudioProcessorTest : public ::testing::Test
 public:
 	virtual void SetUp()
 	{
-		_ap.reset(new AudioProcessor("virtmic"));
+		//_ap.reset(new AudioProcessor("virtmic"));
+		//_ap.reset(new AudioProcessor("default"));
+		_ap.reset(new AudioProcessor("hw"));
 	}
 
 	virtual void TearDown()
