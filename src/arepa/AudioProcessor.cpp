@@ -215,15 +215,11 @@ AudioProcessor::~AudioProcessor()
 	if (_handle > 0) {
 		int rc = snd_pcm_drain(_handle);
 		if (rc < 0) {
-			std::ostringstream msg;
-			msg << "Stopping '" << _device << "' PCM device error: " << snd_strerror(rc);
-			throw std::runtime_error(msg.str());
+			std::cerr << "ERROR: Stopping '" << _device << "' PCM device error: " << snd_strerror(rc) << std::endl;
 		}
 		rc = snd_pcm_close(_handle);
 		if (rc < 0) {
-			std::ostringstream msg;
-			msg << "Closing '" << _device << "' PCM device error: " << snd_strerror(rc);
-			throw std::runtime_error(msg.str());
+			std::cerr << "ERROR: Closing '" << _device << "' PCM device error: " << snd_strerror(rc) << std::endl;
 		}
 	}
 
