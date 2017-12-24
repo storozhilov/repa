@@ -15,6 +15,8 @@
 #include <boost/thread/mutex.hpp>
 #include <boost/thread/condition_variable.hpp>
 
+#include <ctime>
+
 class AudioProcessor
 {
 public:
@@ -23,7 +25,7 @@ public:
 
 	void start(const std::string& location, const std::string& device) {}
 	// TODO: Use timestamp for records marking
-	void startRecord(const std::string& location, std::size_t recordNumber = 0);
+	void startRecord(const std::string& location);
 	void stopRecord();
 	void stop() {}
 private:
@@ -116,7 +118,7 @@ private:
 	boost::mutex _captureMutex;
 	State _state;
 	std::string _filesLocation;
-	std::size_t _recordNumber;
+	time_t _recordTs;
 	std::size_t _captureOffset;
 	std::size_t _ringsCaptured;
 	std::size_t _recordOffset;
