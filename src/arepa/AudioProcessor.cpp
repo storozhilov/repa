@@ -256,7 +256,12 @@ void AudioProcessor::startRecord(const std::string& location)
 {
 	// TODO: Check location directory is writable.
 	boost::filesystem::file_status s = boost::filesystem::status(location);
-	assert(s.type() == boost::filesystem::directory_file);
+	if (s.type() != boost::filesystem::directory_file) {
+		std::ostringstream msg;
+		msg << "Output location '" << location << "' is not a directory";
+		std::cerr << "AudioProcessor::startRecord('" << location << "'): ERROR: " << msg.str() << std::endl;
+		throw std::runtime_error(msg.str());
+	}
 
 	time_t recordTs = time(0);
 	assert(recordTs > 0);

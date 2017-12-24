@@ -16,6 +16,7 @@ public:
 		//_ap.reset(new AudioProcessor("virtmic"));
 		//_ap.reset(new AudioProcessor("default"));
 		_ap.reset(new AudioProcessor("hw"));
+		boost::this_thread::sleep_for(boost::chrono::milliseconds(100));
 	}
 
 	virtual void TearDown()
@@ -27,11 +28,15 @@ public:
 	std::auto_ptr<AudioProcessor> _ap;
 };
 
-TEST_F(AudioProcessorTest, CreateCheckCapabilities)
+TEST_F(AudioProcessorTest, RecordToInvalidLocation)
 {
-	boost::this_thread::sleep_for(boost::chrono::milliseconds(500));
+	ASSERT_THROW(_ap->startRecord("/foo/bar"), std::runtime_error);
+}
+
+TEST_F(AudioProcessorTest, RecordASecond)
+{
 	_ap->startRecord("tmp_tests");
-	boost::this_thread::sleep_for(boost::chrono::milliseconds(4 * 1000));
+	boost::this_thread::sleep_for(boost::chrono::milliseconds(1 * 1000));
 	_ap->stopRecord();
-	EXPECT_EQ(1, 1);
+	// TODO: Check output files exist and have a proper structure
 }
