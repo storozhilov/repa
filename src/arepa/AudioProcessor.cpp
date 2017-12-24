@@ -66,6 +66,8 @@ AudioProcessor::AudioProcessor(const char * device) :
 	_captureCond(),
 	_captureMutex(),
 	_state(IdleState),
+	_filesLocation(),
+	_recordNumber(0U),
 	_captureOffset(),
 	_ringsCaptured(),
 	_recordOffset(),
@@ -206,7 +208,7 @@ AudioProcessor::AudioProcessor(const char * device) :
 	// Recording channels initialization
 	_captureChannels.resize(channels);
 	for (std::size_t i = 0; i < _captureChannels.size(); ++i) {
-		_captureChannels[i] = new CaptureChannel();
+		_captureChannels[i] = new CaptureChannel(rate, format);
 	}
 
 	// Starting capture & record threads
@@ -229,6 +231,7 @@ AudioProcessor::~AudioProcessor()
 	// Capture ring buffer disposal (not needed)
 	//Buffer().swap(_captureRingBuffer);
 
+	// Closing ALSA
 	if (_handle > 0) {
 		int rc = snd_pcm_drain(_handle);
 		if (rc < 0) {
@@ -242,13 +245,26 @@ AudioProcessor::~AudioProcessor()
 		}
 	}
 
+	// Disposing capture channels
 	for (std::size_t i = 0; i < _captureChannels.size(); ++i) {
 		delete _captureChannels[i];
 	}
 }
 
-void AudioProcessor::startRecord(const std::string& location, const std::string& filenameSuffix)
+void AudioProcessor::startRecord(const std::string& location, std::size_t recordNumber)
 {
+	// TODO: Check location directory exists and writable.
+	boost::unique_lock<boost::mutex> lock(_captureMutex);
+	if (_state != CaptureState) {
+		std::ostringstream msg;
+		msg << "AudioProcessor::startRecord(): Invalid sound processor state: " << _state;
+		throw std::runtime_error(msg.str());
+	}
+	_state = RecordStartingState;
+	_filesLocation = location;
+	_recordNumber = (recordNumber == 0) ? _recordNumber + 1 : recordNumber;
+	_captureCond.notify_all();
+	// TODO: Awaiting for state to become 'RecordState'
 }
 
 void AudioProcessor::runCapture()
@@ -315,6 +331,7 @@ void AudioProcessor::runCapture()
 void AudioProcessor::runCapturePostProcessing()
 {
 	snd_pcm_format_t format = _format.load();
+	unsigned int rate = _rate.load();
 	unsigned int bytesPerSample = _bytesPerSample.load();
 	unsigned int channels = _channels.load();
 	unsigned int periodSize = _periodSize.load();
@@ -327,15 +344,31 @@ void AudioProcessor::runCapturePostProcessing()
 	std::size_t recordOffset = 0U;
 	std::size_t ringsRecorded = 0U;
 
+	bool isRecording = false;
+	std::string filesLocation;
+	std::size_t recordNumber;
+
 	while (true) {
 		// Waiting for data to be captured
 		std::size_t absoluteRecordOffset = ringsRecorded * PeriodsInBuffer + recordOffset;
 
 		boost::unique_lock<boost::mutex> lock(_captureMutex);
 
+		bool shouldCreateFiles = false;
+		bool shouldCloseFiles = false;
+
 		if (_state == IdleState) {
 			break;
-		} else if ((_state != CaptureStartingState) && (_state != CaptureState) && (_state != RecordStartingState) &&
+		} else if (_state == RecordStartingState) {
+			if (isRecording) {
+				throw std::runtime_error("AudioProcessor::runCapturePostProcessing(): Recording is already started");
+			}
+			_state = RecordState;
+			shouldCreateFiles = true;
+			isRecording = true;
+			filesLocation = _filesLocation;
+			recordNumber = _recordNumber;
+		} else if ((_state != CaptureStartingState) && (_state != CaptureState) &&
 				(_state != RecordState) && (_state != RecordStoppingState)) {
 			std::ostringstream msg;
 			msg << "AudioProcessor::runCapturePostProcessing(): Invalid sound processor state: " << _state;
@@ -346,9 +379,20 @@ void AudioProcessor::runCapturePostProcessing()
 		_ringsRecorded = ringsRecorded;
 		while (absoluteRecordOffset >= (_ringsCaptured * PeriodsInBuffer + _captureOffset)) {
 			_captureCond.wait(lock);
+
+			// TODO: Move duplicated state checking code to the single location
 			if (_state == IdleState) {
 				break;
-			} else if ((_state != CaptureStartingState) && (_state != CaptureState) && (_state != RecordStartingState) &&
+			} else if (_state == RecordStartingState) {
+				if (isRecording) {
+					throw std::runtime_error("AudioProcessor::runCapturePostProcessing(): Recording is already started");
+				}
+				_state = RecordState;
+				shouldCreateFiles = true;
+				isRecording = true;
+				filesLocation = _filesLocation;
+				recordNumber = _recordNumber;
+			} else if ((_state != CaptureStartingState) && (_state != CaptureState) &&
 					(_state != RecordState) && (_state != RecordStoppingState)) {
 				std::ostringstream msg;
 				msg << "AudioProcessor::runCapturePostProcessing(): Invalid sound processor state: " << _state;
@@ -358,6 +402,20 @@ void AudioProcessor::runCapturePostProcessing()
 		captureOffset = _captureOffset;
 		ringsCaptured = _ringsCaptured;
 		lock.unlock();
+
+		// Creating WAV-files if needed
+		if (shouldCreateFiles) {
+			std::cout << "AudioProcessor::runCapturePostProcessing(): NOTICE: Start record command received" << std::endl;
+			for (std::size_t i = 0; i < channels; ++i) {
+				std::ostringstream filename;
+				filename << std::setfill('0') << "record_" << std::setw(6) << recordNumber << ".track_" <<
+					std::setw(2) << (i + 1) << ".wav";
+				boost::filesystem::path fullPath = boost::filesystem::path(filesLocation) /
+					boost::filesystem::path(filename.str());
+
+				_captureChannels[i]->openFile(fullPath.native());
+			}
+		}
 
 		std::size_t absoluteCaptureOffset = ringsCaptured * PeriodsInBuffer + captureOffset;
 		if (absoluteRecordOffset >= absoluteCaptureOffset) {
@@ -420,4 +478,73 @@ void AudioProcessor::runCapturePostProcessing()
 			}
 		}
 	}
+
+	if (isRecording) {
+		std::cout << ">>> TODO: Closing wav-files" << std::endl;
+	}
+
+}
+
+//------------------------------------------------------------------------------
+
+
+AudioProcessor::CaptureChannel::CaptureChannel(unsigned int rate, snd_pcm_format_t alsaFormat) :
+	_rate(rate),
+	_alsaFormat(alsaFormat),
+	_sfFormat(SF_FORMAT_WAV),
+	_level(0U),
+	_filename(),
+	_file(0)
+{
+	switch (alsaFormat) {
+		case SND_PCM_FORMAT_S16_LE:
+			_sfFormat |= SF_FORMAT_PCM_16;
+			break;
+		case SND_PCM_FORMAT_S32_LE:
+			_sfFormat |= SF_FORMAT_PCM_32;
+			break;
+		case SND_PCM_FORMAT_FLOAT_LE:
+			_sfFormat |= SF_FORMAT_FLOAT;
+			break;
+		default:
+			std::ostringstream msg;
+			msg << "WAV-file format is not supported: " << snd_pcm_format_name(alsaFormat) <<
+				", " << snd_pcm_format_description(alsaFormat);
+			std::cerr << "AudioProcessor::CaptureChannel::CaptureChannel(): ERROR: " << msg.str() << std::endl;
+			throw std::runtime_error(msg.str());
+	}
+}
+
+AudioProcessor::CaptureChannel::~CaptureChannel()
+{
+	if (_file) {
+		std::cerr << "AudioProcessor::CaptureChannel::~CaptureChannel(): WARNING: File was not closed explicitly: '" <<
+			_filename << '\'' << std::endl;
+		closeFile();
+	}
+}
+
+void AudioProcessor::CaptureChannel::openFile(const std::string& filename)
+{
+	if (_file) {
+		std::ostringstream msg;
+		msg << "File is already opened: '" << _filename << '\'';
+		std::cerr << "AudioProcessor::CaptureChannel::openFile('" << filename << "'): ERROR: " << msg.str() << std::endl;
+		throw std::runtime_error(msg.str());
+	}
+	std::cout << "AudioProcessor::CaptureChannel::openFile(): NOTICE: Opening '" << filename << "' WAV-file" << std::endl;
+	_file = new SndfileHandle(filename.c_str(), SFM_WRITE, _sfFormat, 1, _rate);
+	_filename = filename;
+}
+
+void AudioProcessor::CaptureChannel::closeFile()
+{
+	if (!_file) {
+		std::ostringstream msg;
+		msg << "File is already closed: '" << _filename << '\'';
+		std::cerr << "AudioProcessor::CaptureChannel::closeFile(): ERROR: " << msg.str() << std::endl;
+		throw std::runtime_error(msg.str());
+	}
+	delete _file;
+	_file = 0;
 }

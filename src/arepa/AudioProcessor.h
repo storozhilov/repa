@@ -22,15 +22,29 @@ public:
 	~AudioProcessor();
 
 	void start(const std::string& location, const std::string& device) {}
-	void startRecord(const std::string& location, const std::string& filenameSuffix = std::string());
+	// TODO: Use timestamp for records marking
+	void startRecord(const std::string& location, std::size_t recordNumber = 0);
+	void stopRecord();
 	void stop() {}
 private:
 	typedef std::vector<char> Buffer;
 
-	struct CaptureChannel
+	// TODO: Make a separate class & implement autotests
+	class CaptureChannel
 	{
-		boost::atomic<unsigned int> level;	// TODO: Maybe use float for percentage
-		SndfileHandle * file;
+	public:
+		CaptureChannel(unsigned int rate, snd_pcm_format_t alsaFormat);
+		~CaptureChannel();
+
+		void openFile(const std::string& filename);
+		void closeFile();
+	private:
+		unsigned int _rate;
+		snd_pcm_format_t _alsaFormat;
+		int _sfFormat;
+		boost::atomic<unsigned int> _level;	// TODO: Maybe use float for percentage
+		std::string _filename;
+		SndfileHandle * _file;
 	};
 	typedef std::vector<CaptureChannel *> CaptureChannels;
 
@@ -94,6 +108,8 @@ private:
 	boost::condition_variable _captureCond;
 	boost::mutex _captureMutex;
 	State _state;
+	std::string _filesLocation;
+	std::size_t _recordNumber;
 	std::size_t _captureOffset;
 	std::size_t _ringsCaptured;
 	std::size_t _recordOffset;
