@@ -436,38 +436,13 @@ void AudioProcessor::runCapturePostProcessing()
 			for (std::size_t i = 0U; i < channels; ++i) {
 				// TODO: Scanning & updating level
 
-				// Savind record buffer data to WAV file
-				sf_count_t itemsToWrite = 0;
-				sf_count_t itemsWritten = 0;
+				if (!isRecording) {
+					continue;
+				}
 
 				char * buf = &recordBuffer[i * _periodSize * bytesPerSample];
 				std::size_t size = _periodSize * bytesPerSample;
-
-/*				switch (format) {
-					case SND_PCM_FORMAT_S16_LE:
-						itemsToWrite = size / 2;
-						itemsWritten = _records[i + 1]->write(reinterpret_cast<short *>(buf), itemsToWrite);
-						break;
-					case SND_PCM_FORMAT_S32_LE:
-						itemsToWrite = size / 4;
-						itemsWritten = _records[i + 1]->write(reinterpret_cast<int *>(buf), itemsToWrite);
-						break;
-					case SND_PCM_FORMAT_FLOAT_LE:
-						itemsToWrite = size / 4;
-						itemsWritten = _records[i + 1]->write(reinterpret_cast<float *>(buf), itemsToWrite);
-						break;
-					default:
-						std::ostringstream msg;
-						msg << "WAV-file format is not supported: " << snd_pcm_format_name(format) <<
-							", " << snd_pcm_format_description(format);
-						throw std::runtime_error(msg.str());
-				}
-
-				if (itemsWritten != itemsToWrite) {
-					std::ostringstream msg;
-					msg << "Unconsistent written items count: " << itemsWritten << '/' << itemsToWrite;
-					throw std::runtime_error(msg.str());
-				}*/
+				_captureChannels[i]->write(buf, size);
 			}
 
 			std::cout << '+';
@@ -496,7 +471,7 @@ AudioProcessor::CaptureChannel::CaptureChannel(unsigned int rate, snd_pcm_format
 	_filename(),
 	_file(0)
 {
-	switch (alsaFormat) {
+	switch (_alsaFormat) {
 		case SND_PCM_FORMAT_S16_LE:
 			_sfFormat |= SF_FORMAT_PCM_16;
 			break;
@@ -508,8 +483,8 @@ AudioProcessor::CaptureChannel::CaptureChannel(unsigned int rate, snd_pcm_format
 			break;
 		default:
 			std::ostringstream msg;
-			msg << "WAV-file format is not supported: " << snd_pcm_format_name(alsaFormat) <<
-				", " << snd_pcm_format_description(alsaFormat);
+			msg << "WAV-file format is not supported: " << snd_pcm_format_name(_alsaFormat) <<
+				", " << snd_pcm_format_description(_alsaFormat);
 			std::cerr << "AudioProcessor::CaptureChannel::CaptureChannel(): ERROR: " << msg.str() << std::endl;
 			throw std::runtime_error(msg.str());
 	}
@@ -547,4 +522,38 @@ void AudioProcessor::CaptureChannel::closeFile()
 	}
 	delete _file;
 	_file = 0;
+}
+
+void AudioProcessor::CaptureChannel::write(const char * buf, std::size_t size)
+{
+	sf_count_t itemsToWrite = 0;
+	sf_count_t itemsWritten = 0;
+
+	switch (_alsaFormat) {
+		case SND_PCM_FORMAT_S16_LE:
+			itemsToWrite = size / 2;
+			itemsWritten = _file->write(reinterpret_cast<const short *>(buf), itemsToWrite);
+			break;
+		case SND_PCM_FORMAT_S32_LE:
+			itemsToWrite = size / 4;
+			itemsWritten = _file->write(reinterpret_cast<const int *>(buf), itemsToWrite);
+			break;
+		case SND_PCM_FORMAT_FLOAT_LE:
+			itemsToWrite = size / 4;
+			itemsWritten = _file->write(reinterpret_cast<const float *>(buf), itemsToWrite);
+			break;
+		default:
+			std::ostringstream msg;
+			msg << "WAV-file format is not supported: " << snd_pcm_format_name(_alsaFormat) <<
+				", " << snd_pcm_format_description(_alsaFormat);
+			std::cerr << "AudioProcessor::CaptureChannel::write(): ERROR: " << msg.str() << std::endl;
+			throw std::runtime_error(msg.str());
+	}
+
+	if (itemsWritten != itemsToWrite) {
+		std::ostringstream msg;
+		msg << "Unconsistent written items count: " << itemsWritten << '/' << itemsToWrite;
+		std::cerr << "AudioProcessor::CaptureChannel::write(): ERROR: " << msg.str() << std::endl;
+		throw std::runtime_error(msg.str());
+	}
 }

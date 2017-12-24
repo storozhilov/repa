@@ -42,6 +42,7 @@ private:
 		{
 			return _file;
 		}
+		void write(const char * buf, std::size_t size);
 	private:
 		unsigned int _rate;
 		snd_pcm_format_t _alsaFormat;
