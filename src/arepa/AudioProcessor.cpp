@@ -349,40 +349,19 @@ void AudioProcessor::runCapturePostProcessing()
 	std::size_t recordNumber;
 
 	while (true) {
+		bool shouldCreateFiles = false;
+		bool shouldCloseFiles = false;
 		// Waiting for data to be captured
 		std::size_t absoluteRecordOffset = ringsRecorded * PeriodsInBuffer + recordOffset;
 
 		boost::unique_lock<boost::mutex> lock(_captureMutex);
 
-		bool shouldCreateFiles = false;
-		bool shouldCloseFiles = false;
-
-		if (_state == IdleState) {
-			break;
-		} else if (_state == RecordStartingState) {
-			if (isRecording) {
-				throw std::runtime_error("AudioProcessor::runCapturePostProcessing(): Recording is already started");
-			}
-			_state = RecordState;
-			shouldCreateFiles = true;
-			isRecording = true;
-			filesLocation = _filesLocation;
-			recordNumber = _recordNumber;
-		} else if ((_state != CaptureStartingState) && (_state != CaptureState) &&
-				(_state != RecordState) && (_state != RecordStoppingState)) {
-			std::ostringstream msg;
-			msg << "AudioProcessor::runCapturePostProcessing(): Invalid sound processor state: " << _state;
-			throw std::runtime_error(msg.str());
-		}
-
 		_recordOffset = recordOffset;
 		_ringsRecorded = ringsRecorded;
-		while (absoluteRecordOffset >= (_ringsCaptured * PeriodsInBuffer + _captureOffset)) {
-			_captureCond.wait(lock);
 
-			// TODO: Move duplicated state checking code to the single location
+		while (true) {
 			if (_state == IdleState) {
-				break;
+				return;
 			} else if (_state == RecordStartingState) {
 				if (isRecording) {
 					throw std::runtime_error("AudioProcessor::runCapturePostProcessing(): Recording is already started");
@@ -398,6 +377,12 @@ void AudioProcessor::runCapturePostProcessing()
 				msg << "AudioProcessor::runCapturePostProcessing(): Invalid sound processor state: " << _state;
 				throw std::runtime_error(msg.str());
 			}
+
+			if (absoluteRecordOffset < (_ringsCaptured * PeriodsInBuffer + _captureOffset)) {
+				break;
+			}
+
+			_captureCond.wait(lock);
 		}
 		captureOffset = _captureOffset;
 		ringsCaptured = _ringsCaptured;
@@ -440,6 +425,7 @@ void AudioProcessor::runCapturePostProcessing()
 					continue;
 				}
 
+				// Writing data to WAV-file
 				char * buf = &recordBuffer[i * _periodSize * bytesPerSample];
 				std::size_t size = _periodSize * bytesPerSample;
 				_captureChannels[i]->write(buf, size);
@@ -453,11 +439,6 @@ void AudioProcessor::runCapturePostProcessing()
 			}
 		}
 	}
-
-	if (isRecording) {
-		std::cout << ">>> TODO: Closing wav-files" << std::endl;
-	}
-
 }
 
 //------------------------------------------------------------------------------
@@ -494,7 +475,7 @@ AudioProcessor::CaptureChannel::~CaptureChannel()
 {
 	if (fileIsOpen()) {
 		std::cerr << "AudioProcessor::CaptureChannel::~CaptureChannel(): WARNING: File was not closed explicitly: '" <<
-			_filename << '\'' << std::endl;
+			_filename << "' -> closing" << std::endl;
 		closeFile();
 	}
 }
