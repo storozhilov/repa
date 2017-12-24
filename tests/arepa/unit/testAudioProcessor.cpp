@@ -32,6 +32,6 @@ TEST_F(AudioProcessorTest, CreateCheckCapabilities)
 	boost::this_thread::sleep_for(boost::chrono::milliseconds(500));
 	_ap->startRecord("tmp_tests");
 	boost::this_thread::sleep_for(boost::chrono::milliseconds(4 * 1000));
-	//_ap->stopRecord();
+	_ap->stopRecord();
 	EXPECT_EQ(1, 1);
 }

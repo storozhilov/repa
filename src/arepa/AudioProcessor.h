@@ -108,7 +108,8 @@ private:
 		RecordRequestedState,
 		RecordRequestConfirmedState,
 		RecordState,
-		RecordStoppingState
+		CaptureRequestedState,
+		CaptureRequestConfirmedState
 	};
 
 	boost::condition_variable _captureCond;

@@ -6,6 +6,7 @@
 #include <cmath>
 #include <fstream>
 #include <cstring>
+#include <cassert>
 #include <boost/filesystem.hpp>
 
 namespace
@@ -292,9 +293,22 @@ void AudioProcessor::stopRecord()
 		std::cerr << "AudioProcessor::stopRecord(): ERROR: " << msg.str() << std::endl;
 		throw std::runtime_error(msg.str());
 	}
-	_state = RecordStoppingState;
+	_state = CaptureRequestedState;
 	_captureCond.notify_all();
+
 	// TODO: Awaiting for state to become 'CaptureState'
+	while (true) {
+		if (_state == CaptureState) {
+			return;
+		}
+		if ((_state != CaptureRequestedState) && (_state != CaptureRequestConfirmedState)) {
+			std::ostringstream msg;
+			msg << "Invalid recording state: " << _state;
+			std::cerr << "AudioProcessor::stopRecord(): ERROR: " << msg.str() << std::endl;
+			throw std::runtime_error(msg.str());
+		}
+		_captureCond.wait(lock);
+	}
 }
 
 void AudioProcessor::runCapture()
@@ -346,7 +360,7 @@ void AudioProcessor::runCapture()
 			_state = CaptureState;
 		} else if ((_state != CaptureState) && (_state != RecordRequestedState) &&
 				(_state != RecordRequestConfirmedState) && (_state != RecordState) &&
-				(_state != RecordStoppingState)) {
+				(_state != CaptureRequestedState) && (_state != CaptureRequestConfirmedState)) {
 			std::ostringstream msg;
 			msg << "AudioProcessor::runCapture(): Invalid sound processor state: " << _state;
 			throw std::runtime_error(msg.str());
@@ -394,9 +408,9 @@ void AudioProcessor::runCapturePostProcessing()
 			if (_state == IdleState) {
 				return;
 			} else if (_state == RecordRequestedState) {
-				if (isRecording) {
-					throw std::runtime_error("AudioProcessor::runCapturePostProcessing(): Recording is already started");
-				}
+				assert(!isRecording);
+				assert(!shouldCloseFiles);
+
 				_state = RecordRequestConfirmedState;
 				shouldCreateFiles = true;
 				isRecording = true;
@@ -405,8 +419,17 @@ void AudioProcessor::runCapturePostProcessing()
 			} else if (_state == RecordRequestConfirmedState) {
 				_state = RecordState;
 				_captureCond.notify_all();
-			} else if ((_state != CaptureStartingState) && (_state != CaptureState) &&
-					(_state != RecordState) && (_state != RecordStoppingState)) {
+			} else if (_state == CaptureRequestedState) {
+				assert(isRecording);
+				assert(!shouldCreateFiles);
+
+				_state = CaptureRequestConfirmedState;
+				shouldCloseFiles = true;
+				isRecording = false;
+			} else if (_state == CaptureRequestConfirmedState) {
+				_state = CaptureState;
+				_captureCond.notify_all();
+			} else if ((_state != CaptureStartingState) && (_state != CaptureState) && (_state != RecordState)) {
 				std::ostringstream msg;
 				msg << "AudioProcessor::runCapturePostProcessing(): Invalid sound processor state: " << _state;
 				throw std::runtime_error(msg.str());
@@ -424,7 +447,9 @@ void AudioProcessor::runCapturePostProcessing()
 
 		// Creating WAV-files if needed
 		if (shouldCreateFiles) {
-			std::cout << "AudioProcessor::runCapturePostProcessing(): NOTICE: Start record command received" << std::endl;
+			assert(!shouldCloseFiles);
+
+			std::cout << "AudioProcessor::runCapturePostProcessing(): NOTICE: Start recording command received" << std::endl;
 			for (std::size_t i = 0; i < channels; ++i) {
 				std::ostringstream filename;
 				filename << std::setfill('0') << "record_" << std::setw(6) << recordNumber << ".track_" <<
@@ -433,6 +458,16 @@ void AudioProcessor::runCapturePostProcessing()
 					boost::filesystem::path(filename.str());
 
 				_captureChannels[i]->openFile(fullPath.native());
+			}
+		}
+
+		// Closing WAV-files if needed
+		if (shouldCloseFiles) {
+			assert(!shouldCreateFiles);
+
+			std::cout << "AudioProcessor::runCapturePostProcessing(): NOTICE: Stop recording command received" << std::endl;
+			for (std::size_t i = 0; i < channels; ++i) {
+				_captureChannels[i]->closeFile();
 			}
 		}
 
