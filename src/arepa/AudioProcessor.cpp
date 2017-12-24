@@ -56,7 +56,6 @@ AudioProcessor::AudioProcessor(const char * device) :
 	_capturePostProcessingThread(),
 	_handle(),
 	_captureChannels(),
-	_records(),
 	_format(),
 	_rate(),
 	_bytesPerSample(),
@@ -252,7 +251,7 @@ AudioProcessor::~AudioProcessor()
 	}
 }
 
-void AudioProcessor::startRecord(const std::string& location)
+time_t AudioProcessor::startRecord(const std::string& location)
 {
 	// TODO: Check location directory is writable.
 	boost::filesystem::file_status s = boost::filesystem::status(location);
@@ -281,7 +280,7 @@ void AudioProcessor::startRecord(const std::string& location)
 	// Awaiting for state to become 'RecordState'
 	while (true) {
 		if (_state == RecordState) {
-			return;
+			return recordTs;
 		}
 		if ((_state != RecordRequestedState) && (_state != RecordRequestConfirmedState)) {
 			std::ostringstream msg;

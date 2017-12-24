@@ -35,7 +35,7 @@ TEST_F(AudioProcessorTest, RecordToInvalidLocation)
 
 TEST_F(AudioProcessorTest, RecordASecond)
 {
-	_ap->startRecord("tmp_tests");
+	time_t recordTs = _ap->startRecord("tmp_tests");
 	boost::this_thread::sleep_for(boost::chrono::milliseconds(1 * 1000));
 	_ap->stopRecord();
 	// TODO: Check output files exist and have a proper structure

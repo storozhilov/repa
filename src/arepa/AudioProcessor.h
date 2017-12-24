@@ -25,41 +25,12 @@ public:
 	AudioProcessor(const char * device);
 	~AudioProcessor();
 
-	void start(const std::string& location, const std::string& device) {}
 	// TODO: Use timestamp for records marking
-	void startRecord(const std::string& location);
+	time_t startRecord(const std::string& location);
 	void stopRecord();
-	void stop() {}
 private:
 	typedef std::vector<char> Buffer;
 	typedef std::vector<CaptureChannel *> CaptureChannels;
-
-	typedef std::map<std::size_t, SndfileHandle *> Records;
-
-	class RecordsCleaner {
-	public:
-		RecordsCleaner(Records& records) :
-			_records(&records)
-		{}
-
-		~RecordsCleaner()
-		{
-			if (_records == 0) {
-				return;
-			}
-
-			for (AudioProcessor::Records::iterator i = _records->begin(); i != _records->end(); ++i) {
-				delete (*i).second;
-			}
-			_records->clear();
-		}
-
-		void release() {
-			_records = 0;
-		}
-	private:
-		Records * _records;
-	};
 
 	void runCapture();
 	void runCapturePostProcessing();
@@ -70,7 +41,6 @@ private:
 	snd_pcm_t * _handle;
 
 	CaptureChannels _captureChannels;
-	Records _records;
 
 	const std::string _device;
 	boost::atomic<snd_pcm_format_t> _format;

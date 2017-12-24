@@ -45,11 +45,11 @@ int main(int argc, char * argv[]) {
 	std::signal(SIGINT, signal_handler);
 
 	AudioProcessor recorder(device.c_str());
-	recorder.start(location, device);
+	recorder.startRecord(location);
 	while (!static_cast<bool>(stopped)) {
 		boost::this_thread::sleep(boost::posix_time::milliseconds(100));
 	}
 	std::cout << "Termination command received -> exiting" << std::endl;
-	recorder.stop();
+	recorder.stopRecord();
 	return 0;
 }
