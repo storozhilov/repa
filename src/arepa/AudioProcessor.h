@@ -25,7 +25,11 @@ public:
 	AudioProcessor(const char * device);
 	~AudioProcessor();
 
-	// TODO: Use timestamp for records marking
+	inline unsigned int getCaptureChannels() const
+	{
+		return _captureChannelsCount.load();
+	}
+
 	time_t startRecord(const std::string& location);
 	void stopRecord();
 private:
@@ -46,7 +50,7 @@ private:
 	boost::atomic<snd_pcm_format_t> _format;
 	boost::atomic<unsigned int> _rate;
 	boost::atomic<unsigned int> _bytesPerSample;
-	boost::atomic<unsigned int> _channels;
+	boost::atomic<unsigned int> _captureChannelsCount;
 	boost::atomic<unsigned int> _periodSize;
 	boost::atomic<std::size_t> _periodBufferSize;
 

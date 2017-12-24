@@ -4,7 +4,6 @@
 
 class CaptureChannelTest : public ::testing::Test
 {
-//protected:
 public:
 	virtual void SetUp()
 	{
