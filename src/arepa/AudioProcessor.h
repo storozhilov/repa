@@ -105,7 +105,8 @@ private:
 		IdleState,
 		CaptureStartingState,
 		CaptureState,
-		RecordStartingState,
+		RecordRequestedState,
+		RecordRequestConfirmedState,
 		RecordState,
 		RecordStoppingState
 	};

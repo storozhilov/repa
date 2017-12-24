@@ -257,14 +257,44 @@ void AudioProcessor::startRecord(const std::string& location, std::size_t record
 	boost::unique_lock<boost::mutex> lock(_captureMutex);
 	if (_state != CaptureState) {
 		std::ostringstream msg;
-		msg << "AudioProcessor::startRecord(): Invalid sound processor state: " << _state;
+		msg << "Invalid recording state: " << _state;
+		std::cerr << "AudioProcessor::startRecord('" << location << "', " << recordNumber <<
+			"): ERROR: " << msg.str() << std::endl;
 		throw std::runtime_error(msg.str());
 	}
-	_state = RecordStartingState;
+	_state = RecordRequestedState;
 	_filesLocation = location;
 	_recordNumber = (recordNumber == 0) ? _recordNumber + 1 : recordNumber;
 	_captureCond.notify_all();
-	// TODO: Awaiting for state to become 'RecordState'
+
+	// Awaiting for state to become 'RecordState'
+	while (true) {
+		if (_state == RecordState) {
+			return;
+		}
+		if ((_state != RecordRequestedState) && (_state != RecordRequestConfirmedState)) {
+			std::ostringstream msg;
+			msg << "Invalid recording state: " << _state;
+			std::cerr << "AudioProcessor::startRecord('" << location << "', " << recordNumber <<
+				"): ERROR: " << msg.str() << std::endl;
+			throw std::runtime_error(msg.str());
+		}
+		_captureCond.wait(lock);
+	}
+}
+
+void AudioProcessor::stopRecord()
+{
+	boost::unique_lock<boost::mutex> lock(_captureMutex);
+	if (_state != RecordState) {
+		std::ostringstream msg;
+		msg << "Invalid recording state: " << _state;
+		std::cerr << "AudioProcessor::stopRecord(): ERROR: " << msg.str() << std::endl;
+		throw std::runtime_error(msg.str());
+	}
+	_state = RecordStoppingState;
+	_captureCond.notify_all();
+	// TODO: Awaiting for state to become 'CaptureState'
 }
 
 void AudioProcessor::runCapture()
@@ -314,8 +344,9 @@ void AudioProcessor::runCapture()
 			break;
 		} else if (_state == CaptureStartingState) {
 			_state = CaptureState;
-		} else if ((_state != CaptureState) && (_state != RecordStartingState) &&
-				(_state != RecordState) && (_state != RecordStoppingState)) {
+		} else if ((_state != CaptureState) && (_state != RecordRequestedState) &&
+				(_state != RecordRequestConfirmedState) && (_state != RecordState) &&
+				(_state != RecordStoppingState)) {
 			std::ostringstream msg;
 			msg << "AudioProcessor::runCapture(): Invalid sound processor state: " << _state;
 			throw std::runtime_error(msg.str());
@@ -362,15 +393,18 @@ void AudioProcessor::runCapturePostProcessing()
 		while (true) {
 			if (_state == IdleState) {
 				return;
-			} else if (_state == RecordStartingState) {
+			} else if (_state == RecordRequestedState) {
 				if (isRecording) {
 					throw std::runtime_error("AudioProcessor::runCapturePostProcessing(): Recording is already started");
 				}
-				_state = RecordState;
+				_state = RecordRequestConfirmedState;
 				shouldCreateFiles = true;
 				isRecording = true;
 				filesLocation = _filesLocation;
 				recordNumber = _recordNumber;
+			} else if (_state == RecordRequestConfirmedState) {
+				_state = RecordState;
+				_captureCond.notify_all();
 			} else if ((_state != CaptureStartingState) && (_state != CaptureState) &&
 					(_state != RecordState) && (_state != RecordStoppingState)) {
 				std::ostringstream msg;
