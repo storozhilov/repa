@@ -1,6 +1,8 @@
 #ifndef __AREPA__AUDIO_PROCESSOR_H
 #define __AREPA__AUDIO_PROCESSOR_H
 
+#include "CaptureChannel.h"
+
 #define ALSA_PCM_NEW_HW_PARAMS_API
 #include <alsa/asoundlib.h>
 
@@ -30,29 +32,6 @@ public:
 	void stop() {}
 private:
 	typedef std::vector<char> Buffer;
-
-	// TODO: Make a separate class & implement autotests
-	class CaptureChannel
-	{
-	public:
-		CaptureChannel(unsigned int rate, snd_pcm_format_t alsaFormat);
-		~CaptureChannel();
-
-		void openFile(const std::string& filename);
-		void closeFile();
-		inline bool fileIsOpen() const
-		{
-			return _file;
-		}
-		void write(const char * buf, std::size_t size);
-	private:
-		unsigned int _rate;
-		snd_pcm_format_t _alsaFormat;
-		int _sfFormat;
-		boost::atomic<unsigned int> _level;	// TODO: Maybe use float for percentage
-		std::string _filename;
-		SndfileHandle * _file;
-	};
 	typedef std::vector<CaptureChannel *> CaptureChannels;
 
 	typedef std::map<std::size_t, SndfileHandle *> Records;
