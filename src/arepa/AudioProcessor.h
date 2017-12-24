@@ -38,6 +38,10 @@ private:
 
 		void openFile(const std::string& filename);
 		void closeFile();
+		inline bool fileIsOpen() const
+		{
+			return _file;
+		}
 	private:
 		unsigned int _rate;
 		snd_pcm_format_t _alsaFormat;

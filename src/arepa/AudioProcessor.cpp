@@ -517,7 +517,7 @@ AudioProcessor::CaptureChannel::CaptureChannel(unsigned int rate, snd_pcm_format
 
 AudioProcessor::CaptureChannel::~CaptureChannel()
 {
-	if (_file) {
+	if (fileIsOpen()) {
 		std::cerr << "AudioProcessor::CaptureChannel::~CaptureChannel(): WARNING: File was not closed explicitly: '" <<
 			_filename << '\'' << std::endl;
 		closeFile();
@@ -526,7 +526,7 @@ AudioProcessor::CaptureChannel::~CaptureChannel()
 
 void AudioProcessor::CaptureChannel::openFile(const std::string& filename)
 {
-	if (_file) {
+	if (fileIsOpen()) {
 		std::ostringstream msg;
 		msg << "File is already opened: '" << _filename << '\'';
 		std::cerr << "AudioProcessor::CaptureChannel::openFile('" << filename << "'): ERROR: " << msg.str() << std::endl;
@@ -539,7 +539,7 @@ void AudioProcessor::CaptureChannel::openFile(const std::string& filename)
 
 void AudioProcessor::CaptureChannel::closeFile()
 {
-	if (!_file) {
+	if (!fileIsOpen()) {
 		std::ostringstream msg;
 		msg << "File is already closed: '" << _filename << '\'';
 		std::cerr << "AudioProcessor::CaptureChannel::closeFile(): ERROR: " << msg.str() << std::endl;
