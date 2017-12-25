@@ -1,5 +1,6 @@
 #include <iostream>
 #include <glibmm.h>
+#include <gtkmm.h>
 
 #include <csignal>
 
@@ -10,6 +11,23 @@
 #include <boost/program_options.hpp>
 
 #include "AudioProcessor.h"
+
+class OptionGroup : public Glib::OptionGroup
+{
+public:
+	OptionGroup() :
+		Glib::OptionGroup("arepa_group", "Audio repa options group", "Help about audio repa options group"),
+		captureDevice("hw")
+	{
+		Glib::OptionEntry captureDeviceOptionEntry;
+		captureDeviceOptionEntry.set_long_name("capture-device");
+		captureDeviceOptionEntry.set_short_name('C');
+		captureDeviceOptionEntry.set_description("Capture device name ['hw']");
+		add_entry(captureDeviceOptionEntry, captureDevice);
+	}
+
+	Glib::ustring captureDevice;
+};
 
 namespace
 {
@@ -22,6 +40,16 @@ void signal_handler(int signal)
 }
 
 int main(int argc, char * argv[]) {
+
+	Glib::init();
+	Glib::OptionContext oc;
+	OptionGroup og;
+	oc.set_main_group(og);
+	Gtk::Main kit(argc, argv, oc);
+
+	std::cout << "Capture device is '" << og.captureDevice << '\'' << std::endl;
+	return 0;
+
 	std::string device;
 	std::string location;
 
