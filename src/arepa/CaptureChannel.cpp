@@ -24,7 +24,7 @@ CaptureChannel::CaptureChannel(unsigned int rate, snd_pcm_format_t alsaFormat) :
 			std::ostringstream msg;
 			msg << "WAV-file format is not supported: " << snd_pcm_format_name(_alsaFormat) <<
 				", " << snd_pcm_format_description(_alsaFormat);
-			std::cerr << "CaptureChannel::CaptureChannel(): ERROR: " << msg.str() << std::endl;
+			std::cerr << "ERROR: CaptureChannel::CaptureChannel(): " << msg.str() << std::endl;
 			throw std::runtime_error(msg.str());
 	}
 }
@@ -32,7 +32,7 @@ CaptureChannel::CaptureChannel(unsigned int rate, snd_pcm_format_t alsaFormat) :
 CaptureChannel::~CaptureChannel()
 {
 	if (fileIsOpen()) {
-		std::cerr << "CaptureChannel::~CaptureChannel(): WARNING: File was not closed explicitly: '" <<
+		std::cerr << "WARNING: CaptureChannel::~CaptureChannel(): File was not closed explicitly: '" <<
 			_filename << "' -> closing" << std::endl;
 		closeFile();
 	}
@@ -43,10 +43,10 @@ void CaptureChannel::openFile(const std::string& filename)
 	if (fileIsOpen()) {
 		std::ostringstream msg;
 		msg << "File is already opened: '" << _filename << '\'';
-		std::cerr << "CaptureChannel::openFile('" << filename << "'): ERROR: " << msg.str() << std::endl;
+		std::cerr << "ERROR: CaptureChannel::openFile('" << filename << "'): " << msg.str() << std::endl;
 		throw std::runtime_error(msg.str());
 	}
-	std::cout << "CaptureChannel::openFile('" << filename << "'): NOTICE: Opening WAV-file" << std::endl;
+	std::cout << "NOTICE: CaptureChannel::openFile('" << filename << "'): Opening WAV-file" << std::endl;
 	_file = new SndfileHandle(filename.c_str(), SFM_WRITE, _sfFormat, 1, _rate);
 	_filename = filename;
 }
@@ -56,10 +56,10 @@ void CaptureChannel::closeFile()
 	if (!fileIsOpen()) {
 		std::ostringstream msg;
 		msg << "File is already closed: '" << _filename << '\'';
-		std::cerr << "CaptureChannel::closeFile(): ERROR: " << msg.str() << std::endl;
+		std::cerr << "ERROR: CaptureChannel::closeFile(): " << msg.str() << std::endl;
 		throw std::runtime_error(msg.str());
 	}
-	std::cout << "CaptureChannel::closeFile(): NOTICE: Closing '" << _filename << "' WAV-file" << std::endl;
+	std::cout << "NOTICE: CaptureChannel::closeFile(): Closing '" << _filename << "' WAV-file" << std::endl;
 	delete _file;
 	_file = 0;
 }
@@ -93,7 +93,7 @@ void CaptureChannel::write(const char * buf, std::size_t size)
 	if (itemsWritten != itemsToWrite) {
 		std::ostringstream msg;
 		msg << "Unconsistent written items count: " << itemsWritten << '/' << itemsToWrite;
-		std::cerr << "CaptureChannel::write(): ERROR: " << msg.str() << std::endl;
+		std::cerr << "ERROR: CaptureChannel::write(): " << msg.str() << std::endl;
 		throw std::runtime_error(msg.str());
 	}
 }

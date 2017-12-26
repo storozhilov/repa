@@ -73,30 +73,36 @@ AudioProcessor::AudioProcessor(const char * device) :
 	_recordOffset(),
 	_ringsRecorded()
 {
-	std::cout << "ALSA library version: " << SND_LIB_VERSION_STR << std::endl;
-	std::cout << "PCM stream types:" << std::endl;
+	std::clog << "NOTICE: AudioProcessor::AudioProcessor('" << device << "'): ALSA library version: " <<
+		SND_LIB_VERSION_STR << std::endl;
+	std::clog << "NOTICE: AudioProcessor::AudioProcessor('" << device << "'): PCM stream types:" << std::endl;
 	for (size_t i = 0; i <= SND_PCM_STREAM_LAST; i++) {
-		std::cout << " - " << snd_pcm_stream_name(static_cast<snd_pcm_stream_t>(i)) << std::endl;
+		std::clog << "NOTICE: AudioProcessor::AudioProcessor('" << device << "'):  - " <<
+			snd_pcm_stream_name(static_cast<snd_pcm_stream_t>(i)) << std::endl;
 	}
-	std::cout << "PCM access types:" << std::endl;
+	std::clog << "NOTICE: AudioProcessor::AudioProcessor('" << device << "'): PCM access types:" << std::endl;
 	for (size_t i = 0; i <= SND_PCM_ACCESS_LAST; i++) {
-		std::cout << " - " << snd_pcm_access_name(static_cast<snd_pcm_access_t>(i)) << std::endl;
+		std::clog << "NOTICE: AudioProcessor::AudioProcessor('" << device << "'):  - " <<
+			snd_pcm_access_name(static_cast<snd_pcm_access_t>(i)) << std::endl;
 	}
-	std::cout << "PCM formats:" << std::endl;
+	std::clog << "NOTICE: AudioProcessor::AudioProcessor('" << device << "'): PCM formats:" << std::endl;
 	for (size_t i = 0; i <= SND_PCM_FORMAT_LAST; i++) {
 		if (snd_pcm_format_name(static_cast<snd_pcm_format_t>(i))) {
-			std::cout << " - " << snd_pcm_format_name(static_cast<snd_pcm_format_t>(i)) <<
+			std::clog << "NOTICE: AudioProcessor::AudioProcessor('" << device << "'):  - " <<
+				snd_pcm_format_name(static_cast<snd_pcm_format_t>(i)) <<
 				": " << snd_pcm_format_description(static_cast<snd_pcm_format_t>(i)) << std::endl;
 		}
 	}
-	std::cout << "PCM subformats:" << std::endl;
+	std::clog << "NOTICE: AudioProcessor::AudioProcessor('" << device << "'): PCM subformats:" << std::endl;
 	for (size_t i = 0; i <= SND_PCM_SUBFORMAT_LAST; i++) {
-		std::cout << " - " << snd_pcm_subformat_name(static_cast<snd_pcm_subformat_t>(i)) <<
+		std::clog << "NOTICE: AudioProcessor::AudioProcessor('" << device << "'):  - " <<
+			snd_pcm_subformat_name(static_cast<snd_pcm_subformat_t>(i)) <<
 			": " << snd_pcm_subformat_description(static_cast<snd_pcm_subformat_t>(i)) << std::endl;
 	}
-	std::cout << "PCM states:" << std::endl;
+	std::clog << "NOTICE: AudioProcessor::AudioProcessor('" << device << "'): PCM states:" << std::endl;
 	for (size_t i = 0; i <= SND_PCM_STATE_LAST; i++) {
-		std::cout << " - " << snd_pcm_state_name(static_cast<snd_pcm_state_t>(i)) << std::endl;
+		std::clog << "NOTICE: AudioProcessor::AudioProcessor('" << device << "'):  - " <<
+			snd_pcm_state_name(static_cast<snd_pcm_state_t>(i)) << std::endl;
 	}
 
 	// ALSA intialization
@@ -104,6 +110,7 @@ AudioProcessor::AudioProcessor(const char * device) :
 	if (rc < 0) {
 		std::ostringstream msg;
 		msg << "Opening '" << _device << "' PCM device error: " << snd_strerror(rc);
+		std::cerr << "ERROR: AudioProcessor::AudioProcessor('" << device << "'): " << msg.str() << std::endl;
 		throw std::runtime_error(msg.str());
 	}
 
@@ -115,12 +122,14 @@ AudioProcessor::AudioProcessor(const char * device) :
 	if (rc < 0) {
 		std::ostringstream msg;
 		msg << "Restricting access type error: " << snd_strerror(rc);
+		std::cerr << "ERROR: AudioProcessor::AudioProcessor('" << device << "'): " << msg.str() << std::endl;
 		throw std::runtime_error(msg.str());
 	}
 
 	rc = snd_pcm_hw_params_set_format(_handle, params, SND_PCM_FORMAT_S16_LE);
 	if (rc < 0) {
-		std::cerr << "WARNING: Requesting format error: " << snd_strerror(rc) <<std::endl;
+		std::cerr << "WARNING: AudioProcessor::AudioProcessor('" << device <<
+			"'): Requesting format error: " << snd_strerror(rc) <<std::endl;
 	}
 
 	unsigned int val = 44100;
@@ -129,6 +138,7 @@ AudioProcessor::AudioProcessor(const char * device) :
 	if (rc < 0) {
 		std::ostringstream msg;
 		msg << "Restricting sample rate error: " << snd_strerror(rc);
+		std::cerr << "ERROR: AudioProcessor::AudioProcessor('" << device << "'): " << msg.str() << std::endl;
 		throw std::runtime_error(msg.str());
 	}
 
@@ -136,47 +146,58 @@ AudioProcessor::AudioProcessor(const char * device) :
 	if (rc < 0) {
 		std::ostringstream msg;
 		msg << "Setting H/W parameters error: " << snd_strerror(rc);
+		std::cerr << "ERROR: AudioProcessor::AudioProcessor('" << device << "'): " << msg.str() << std::endl;
 		throw std::runtime_error(msg.str());
 	}
 
-	std::cout << "PCM handle name: " << snd_pcm_name(_handle) << std::endl <<
-		"PCM state: " << snd_pcm_state_name(snd_pcm_state(_handle)) << std::endl;
+	std::clog << "NOTICE: AudioProcessor::AudioProcessor('" << device << "'): PCM handle name: " <<
+		snd_pcm_name(_handle) << std::endl <<
+		"NOTICE: AudioProcessor::AudioProcessor('" << device << "'): PCM state: " <<
+		snd_pcm_state_name(snd_pcm_state(_handle)) << std::endl;
 
 	snd_pcm_access_t access;
 	snd_pcm_hw_params_get_access(params, &access);
-	std::cout << "Access type: " << snd_pcm_access_name(access) << std::endl;
+	std::clog << "NOTICE: AudioProcessor::AudioProcessor('" << device << "'): Access type: " <<
+		snd_pcm_access_name(access) << std::endl;
 
 	snd_pcm_format_t format;
 	snd_pcm_hw_params_get_format(params, &format);
 	_format.store(format);
-	std::cout << "Format: " << snd_pcm_format_name(format) << ", " << snd_pcm_format_description(format) << std::endl;
+	std::clog << "NOTICE: AudioProcessor::AudioProcessor('" << device << "'): Format: " <<
+		snd_pcm_format_name(format) << ", " << snd_pcm_format_description(format) << std::endl;
 
 	snd_pcm_subformat_t subformat;
 	snd_pcm_hw_params_get_subformat(params, &subformat);
-	std::cout << "Subformat: " << snd_pcm_subformat_name(subformat) << ", " << snd_pcm_subformat_description(subformat) << std::endl;
+	std::clog << "NOTICE: AudioProcessor::AudioProcessor('" << device << "'): Subformat: " <<
+		snd_pcm_subformat_name(subformat) << ", " << snd_pcm_subformat_description(subformat) << std::endl;
 
 	unsigned int rate;
 	snd_pcm_hw_params_get_rate(params, &rate, &dir);
 	_rate.store(rate);
-	std::cout << "Sample rate: " << rate << " bps" << std::endl;
+	std::clog << "NOTICE: AudioProcessor::AudioProcessor('" << device << "'): Sample rate: " <<
+		rate << " bps" << std::endl;
 
 	unsigned int captureChannelsCount;
 	snd_pcm_hw_params_get_channels(params, &captureChannelsCount);
 	_captureChannelsCount.store(captureChannelsCount);
-	std::cout << "Capture channels: " << captureChannelsCount << std::endl;
+	std::clog << "NOTICE: AudioProcessor::AudioProcessor('" << device << "'): Capture channels: " <<
+		captureChannelsCount << std::endl;
 
 	unsigned int periodTime;
 	snd_pcm_hw_params_get_period_time(params, &periodTime, &dir);
-	std::cout << "Period time: " << periodTime << " us" << std::endl;
+	std::clog << "NOTICE: AudioProcessor::AudioProcessor('" << device << "'): Period time: " <<
+	       periodTime << " us" << std::endl;
 
 	snd_pcm_uframes_t periodSize;
 	snd_pcm_hw_params_get_period_size(params, &periodSize, &dir);
 	_periodSize.store(periodSize);
-	std::cout << "Period size: " << periodSize << " frames" << std::endl;
+	std::clog << "NOTICE: AudioProcessor::AudioProcessor('" << device << "'): Period size: " <<
+		periodSize << " frames" << std::endl;
 
 	unsigned int bufferTime;
 	snd_pcm_hw_params_get_buffer_time(params, &bufferTime, &dir);
-	std::cout << "Buffer time: " << bufferTime << " us" << std::endl;
+	std::clog << "NOTICE: AudioProcessor::AudioProcessor('" << device << "'): Buffer time: " <<
+		bufferTime << " us" << std::endl;
 
 	// TODO: Correct bytes per sample calculation
 	std::size_t bytesPerSample = 2;
@@ -186,17 +207,21 @@ AudioProcessor::AudioProcessor(const char * device) :
 		std::ostringstream msg;
 		msg << "Unsupported format: " << snd_pcm_format_name(format) << '(' <<
 			snd_pcm_format_description(format) << ')';
+		std::cerr << "ERROR: AudioProcessor::AudioProcessor('" << device << "'): " << msg.str() << std::endl;
 		throw std::runtime_error(msg.str());
 	}
 	_bytesPerSample.store(bytesPerSample);
-	std::cout << "Bytes per sample: " << bytesPerSample << std::endl;
+	std::clog << "NOTICE: AudioProcessor::AudioProcessor('" << device << "'): Bytes per sample: " <<
+		bytesPerSample << std::endl;
 
 	std::size_t periodBufferSize = periodSize * captureChannelsCount * bytesPerSample;
 	_periodBufferSize.store(periodBufferSize);
-	std::cout << "Period buffer size: " << periodBufferSize << std::endl;
+	std::clog << "NOTICE: AudioProcessor::AudioProcessor('" << device << "'): Period buffer size: " <<
+		periodBufferSize << std::endl;
 
 	std::size_t bufferSize = periodBufferSize * PeriodsInBuffer;
-	std::cout << "Allocating " << (bufferSize / 1024U) << " KB capture ring buffer for " << PeriodsInBuffer <<
+	std::clog << "NOTICE: AudioProcessor::AudioProcessor('" << device << "'): Allocating " <<
+		(bufferSize / 1024U) << " KB capture ring buffer for " << PeriodsInBuffer <<
 		" periods (~" << (periodTime * PeriodsInBuffer / 1000000.0) << " sec)" << std::endl;
 	_captureRingBuffer.resize(bufferSize);
 
@@ -232,12 +257,12 @@ AudioProcessor::~AudioProcessor()
 	if (_handle > 0) {
 		int rc = snd_pcm_drain(_handle);
 		if (rc < 0) {
-			std::cerr << "AudioProcessor::~AudioProcessor(): ERROR: Stopping '" << _device <<
+			std::cerr << "ERROR: AudioProcessor::~AudioProcessor(): Stopping '" << _device <<
 				"' PCM device error: " << snd_strerror(rc) << std::endl;
 		}
 		rc = snd_pcm_close(_handle);
 		if (rc < 0) {
-			std::cerr << "AudioProcessor::~AudioProcessor(): ERROR: Closing '" << _device <<
+			std::cerr << "ERROR: AudioProcessor::~AudioProcessor(): Closing '" << _device <<
 				"' PCM device error: " << snd_strerror(rc) << std::endl;
 		}
 	}
@@ -255,7 +280,7 @@ time_t AudioProcessor::startRecord(const std::string& location)
 	if (s.type() != boost::filesystem::directory_file) {
 		std::ostringstream msg;
 		msg << "Output location '" << location << "' is not a directory";
-		std::cerr << "AudioProcessor::startRecord('" << location << "'): ERROR: " << msg.str() << std::endl;
+		std::cerr << "ERROR: AudioProcessor::startRecord('" << location << "'): " << msg.str() << std::endl;
 		throw std::runtime_error(msg.str());
 	}
 
@@ -266,7 +291,7 @@ time_t AudioProcessor::startRecord(const std::string& location)
 	if (_state != CaptureState) {
 		std::ostringstream msg;
 		msg << "Invalid recording state: " << _state;
-		std::cerr << "AudioProcessor::startRecord('" << location << "'): ERROR: " << msg.str() << std::endl;
+		std::cerr << "ERROR: AudioProcessor::startRecord('" << location << "'): " << msg.str() << std::endl;
 		throw std::runtime_error(msg.str());
 	}
 	_state = RecordRequestedState;
@@ -282,7 +307,7 @@ time_t AudioProcessor::startRecord(const std::string& location)
 		if ((_state != RecordRequestedState) && (_state != RecordRequestConfirmedState)) {
 			std::ostringstream msg;
 			msg << "Invalid recording state: " << _state;
-			std::cerr << "AudioProcessor::startRecord('" << location << "'): ERROR: " << msg.str() << std::endl;
+			std::cerr << "ERROR: AudioProcessor::startRecord('" << location << "'): " << msg.str() << std::endl;
 			throw std::runtime_error(msg.str());
 		}
 		_captureCond.wait(lock);
@@ -295,7 +320,7 @@ void AudioProcessor::stopRecord()
 	if (_state != RecordState) {
 		std::ostringstream msg;
 		msg << "Invalid recording state: " << _state;
-		std::cerr << "AudioProcessor::stopRecord(): ERROR: " << msg.str() << std::endl;
+		std::cerr << "ERROR: AudioProcessor::stopRecord(): " << msg.str() << std::endl;
 		throw std::runtime_error(msg.str());
 	}
 	_state = CaptureRequestedState;
@@ -309,7 +334,7 @@ void AudioProcessor::stopRecord()
 		if ((_state != CaptureRequestedState) && (_state != CaptureRequestConfirmedState)) {
 			std::ostringstream msg;
 			msg << "Invalid recording state: " << _state;
-			std::cerr << "AudioProcessor::stopRecord(): ERROR: " << msg.str() << std::endl;
+			std::cerr << "ERROR: AudioProcessor::stopRecord(): " << msg.str() << std::endl;
 			throw std::runtime_error(msg.str());
 		}
 		_captureCond.wait(lock);
@@ -338,23 +363,24 @@ void AudioProcessor::runCapture()
 		if (absoluteCaptureOffset >= (absoluteRecordOffset + PeriodsInBuffer)) {
 			// TODO: Handle that properly
 			std::cerr << "AudioProcessor::runCapture(): ERROR: Overrun occurred" << std::endl;
-			throw std::runtime_error("ERROR: Overrun occurred");
+			throw std::runtime_error("Overrun occurred");
 		}
 
 		int rc = snd_pcm_readi(_handle, &_captureRingBuffer[captureRingBufferOffset], periodSize);
 		if (rc == -EPIPE) {
 			/* EPIPE means overrun */
-			std::cerr << "AudioProcessor::runCapture(): ERROR: ALSA overrun occurred" << std::endl;
+			std::cerr << "ERROR: AudioProcessor::runCapture(): ALSA overrun occurred" << std::endl;
 			snd_pcm_prepare(_handle);
 			continue;
 		} else if (rc < 0) {
-			std::cerr << "AudioProcessor::runCapture(): ERROR: ALSA reading data error: " << snd_strerror(rc) << std::endl;
+			std::cerr << "ERROR: AudioProcessor::runCapture(): ALSA reading data error: " << snd_strerror(rc) << std::endl;
 			return;
 		} else if (rc != periodSize) {
 			// TODO: Special handling
-			std::cerr << "AudioProcessor::runCapture(): WARNING: ALSA short read: " << rc << "/" << periodSize << " frames" << std::endl;
+			std::cerr << "WARNING: AudioProcessor::runCapture(): ALSA short read: " << rc << "/" << periodSize << " frames" << std::endl;
 		}
-		std::cout << '.';
+
+		//std::clog << '.';
 
 		captureOffset = (captureOffset + 1) % PeriodsInBuffer;
 		if (captureOffset == 0U) {
@@ -370,7 +396,8 @@ void AudioProcessor::runCapture()
 				(_state != RecordRequestConfirmedState) && (_state != RecordState) &&
 				(_state != CaptureRequestedState) && (_state != CaptureRequestConfirmedState)) {
 			std::ostringstream msg;
-			msg << "AudioProcessor::runCapture(): Invalid sound processor state: " << _state;
+			msg << "Invalid sound processor state: " << _state;
+			std::cerr << "ERROR: AudioProcessor::runCapture(): " << msg.str() << std::endl;
 			throw std::runtime_error(msg.str());
 		}
 		_captureOffset = captureOffset;
@@ -445,7 +472,8 @@ void AudioProcessor::runCapturePostProcessing()
 				_captureCond.notify_all();
 			} else if ((_state != CaptureStartingState) && (_state != CaptureState) && (_state != RecordState)) {
 				std::ostringstream msg;
-				msg << "AudioProcessor::runCapturePostProcessing(): Invalid sound processor state: " << _state;
+				msg << "Invalid sound processor state: " << _state;
+				std::cerr << "ERROR: AudioProcessor::runCapturePostProcessing(): " << msg.str() << std::endl;
 				throw std::runtime_error(msg.str());
 			}
 
@@ -463,7 +491,7 @@ void AudioProcessor::runCapturePostProcessing()
 		if (shouldCreateFiles) {
 			assert(!shouldCloseFiles);
 
-			std::cout << "AudioProcessor::runCapturePostProcessing(): NOTICE: Start recording command received" << std::endl;
+			std::clog << "NOTICE: AudioProcessor::runCapturePostProcessing(): Start recording command received" << std::endl;
 			for (std::size_t i = 0; i < captureChannelsCount; ++i) {
 				std::ostringstream filename;
 				filename << "record_" << recordTs << ".track_" <<
@@ -479,7 +507,7 @@ void AudioProcessor::runCapturePostProcessing()
 		if (shouldCloseFiles) {
 			assert(!shouldCreateFiles);
 
-			std::cout << "AudioProcessor::runCapturePostProcessing(): NOTICE: Stop recording command received" << std::endl;
+			std::clog << "NOTICE: AudioProcessor::runCapturePostProcessing(): Stop recording command received" << std::endl;
 			for (std::size_t i = 0; i < captureChannelsCount; ++i) {
 				_captureChannels[i]->closeFile();
 			}
@@ -514,7 +542,7 @@ void AudioProcessor::runCapturePostProcessing()
 				_captureChannels[i]->write(buf, size);
 			}
 
-			std::cout << '+';
+			//std::clog << '+';
 
 			recordOffset = (recordOffset + 1) % PeriodsInBuffer;
 			if (recordOffset == 0U) {

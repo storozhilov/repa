@@ -1,16 +1,9 @@
+#include "AudioProcessor.h"
+#include "MainWindow.h"
+
 #include <iostream>
 #include <glibmm.h>
 #include <gtkmm.h>
-
-#include <csignal>
-
-#include <unistd.h>
-
-#include <boost/date_time/posix_time/posix_time.hpp>
-#include <boost/thread/thread.hpp>
-#include <boost/program_options.hpp>
-
-#include "AudioProcessor.h"
 
 class OptionGroup : public Glib::OptionGroup
 {
@@ -22,22 +15,19 @@ public:
 		Glib::OptionEntry captureDeviceOptionEntry;
 		captureDeviceOptionEntry.set_long_name("capture-device");
 		captureDeviceOptionEntry.set_short_name('C');
-		captureDeviceOptionEntry.set_description("Capture device name ['hw']");
+		captureDeviceOptionEntry.set_description("Capture device name (optional, default: 'hw')");
 		add_entry(captureDeviceOptionEntry, captureDevice);
+
+		Glib::OptionEntry sessionLocationOptionEntry;
+		sessionLocationOptionEntry.set_long_name("session-location");
+		sessionLocationOptionEntry.set_short_name('l');
+		sessionLocationOptionEntry.set_description("Session location (required)");
+		add_entry(sessionLocationOptionEntry, sessionLocation);
 	}
 
 	Glib::ustring captureDevice;
+	Glib::ustring sessionLocation;
 };
-
-namespace
-{
-	volatile static std::sig_atomic_t stopped = static_cast<std::sig_atomic_t>(false);
-}
-
-void signal_handler(int signal)
-{
-	stopped = static_cast<std::sig_atomic_t>(true);
-}
 
 int main(int argc, char * argv[]) {
 
@@ -47,39 +37,16 @@ int main(int argc, char * argv[]) {
 	oc.set_main_group(og);
 	Gtk::Main kit(argc, argv, oc);
 
-	std::cout << "Capture device is '" << og.captureDevice << '\'' << std::endl;
-	return 0;
-
-	std::string device;
-	std::string location;
-
-	boost::program_options::options_description desc("Allowed options");
-	desc.add_options()
-		("help", "Produce help message")
-		("device,D", boost::program_options::value<std::string>(&device)->default_value("default"), "ALSA capture device")
-		("output,O", boost::program_options::value<std::string>(&location)->default_value(std::string(getcwd(NULL, 0))),
-		 "Location of the output")
-	;
-
-	boost::program_options::variables_map vm;
-	boost::program_options::store(boost::program_options::parse_command_line(argc, argv, desc), vm);
-	boost::program_options::notify(vm);
-
-	if (vm.count("help")) {
-		std::cout << desc << std::endl;
-		return 0;
+	if (og.sessionLocation.empty()) {
+		std::cerr << "ERROR: Empty session location." << std::endl <<
+			oc.get_help() << std::endl;
+		return 1;
 	}
 
-	std::cout << "Recording audio data from '" << device << "' ALSA capture device to '" << location << "' location" << std::endl;
-	std::signal(SIGTERM, signal_handler);
-	std::signal(SIGINT, signal_handler);
+	std::clog << "NOTICE: Capture device: '" << og.captureDevice << '\'' << std::endl;
+	std::clog << "NOTICE: Session location: '" << og.sessionLocation << '\'' << std::endl;
 
-	AudioProcessor recorder(device.c_str());
-	recorder.startRecord(location);
-	while (!static_cast<bool>(stopped)) {
-		boost::this_thread::sleep(boost::posix_time::milliseconds(100));
-	}
-	std::cout << "Termination command received -> exiting" << std::endl;
-	recorder.stopRecord();
-	return 0;
+	AudioProcessor ap(og.captureDevice.c_str());
+	MainWindow mw(ap, og.sessionLocation);
+	Gtk::Main::run(mw);
 }
