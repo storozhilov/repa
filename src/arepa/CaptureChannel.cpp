@@ -6,7 +6,7 @@ CaptureChannel::CaptureChannel(unsigned int rate, snd_pcm_format_t alsaFormat) :
 	_rate(rate),
 	_alsaFormat(alsaFormat),
 	_sfFormat(SF_FORMAT_WAV),
-	_level(0U),
+	_indicator(IndicatorHistorySize),
 	_filename(),
 	_file(0)
 {
@@ -36,6 +36,16 @@ CaptureChannel::~CaptureChannel()
 			_filename << "' -> closing" << std::endl;
 		closeFile();
 	}
+}
+
+void CaptureChannel::addLevel(float level)
+{
+	_indicator.addMeasurement(level);
+}
+
+float CaptureChannel::getLevel(std::size_t ms)
+{
+	return _indicator.getMax(ms);
 }
 
 void CaptureChannel::openFile(const std::string& filename)

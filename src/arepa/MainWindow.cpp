@@ -20,7 +20,7 @@ MainWindow::MainWindow(AudioProcessor& audioProcessor, const Glib::ustring& outp
 		_vbox.pack_start(*hbox, Gtk::PACK_SHRINK);
 		_levelIndicators[i] = manage(new Gtk::ProgressBar());
 		_levelIndicators[i]->set_orientation(Gtk::PROGRESS_BOTTOM_TO_TOP);
-		_levelIndicators[i]->set_fraction(0.25);
+		//_levelIndicators[i]->set_fraction(0.25);
 		hbox->pack_start(*_levelIndicators[i], Gtk::PACK_SHRINK);
 	}
 	show_all_children();

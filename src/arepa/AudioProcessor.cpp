@@ -531,6 +531,8 @@ void AudioProcessor::runCapturePostProcessing()
 
 			for (std::size_t i = 0U; i < captureChannelsCount; ++i) {
 				// TODO: Scanning & updating level
+				float level = 33.0F;
+				_captureChannels[i]->addLevel(level);
 
 				if (!isRecording) {
 					continue;
