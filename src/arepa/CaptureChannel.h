@@ -18,7 +18,7 @@ public:
 	CaptureChannel(unsigned int rate, snd_pcm_format_t alsaFormat);
 	~CaptureChannel();
 
-	void addLevel(float level);
+	//void addLevel(float level);
 	float getLevel(std::size_t ms);
 
 	void openFile(const std::string& filename);
@@ -27,6 +27,7 @@ public:
 	{
 		return _file;
 	}
+	void addLevel(const char * buf, std::size_t size);
 	void write(const char * buf, std::size_t size);
 private:
 	typedef Indicator<float> IndicatorType;

@@ -1,6 +1,7 @@
 #include "CaptureChannel.h"
 #include <iostream>
 #include <sstream>
+#include <cstdlib>
 
 CaptureChannel::CaptureChannel(unsigned int rate, snd_pcm_format_t alsaFormat) :
 	_rate(rate),
@@ -38,10 +39,10 @@ CaptureChannel::~CaptureChannel()
 	}
 }
 
-void CaptureChannel::addLevel(float level)
+/*void CaptureChannel::addLevel(float level)
 {
 	_indicator.addMeasurement(level);
-}
+}*/
 
 float CaptureChannel::getLevel(std::size_t ms)
 {
@@ -72,6 +73,42 @@ void CaptureChannel::closeFile()
 	std::cout << "NOTICE: CaptureChannel::closeFile(): Closing '" << _filename << "' WAV-file" << std::endl;
 	delete _file;
 	_file = 0;
+}
+
+void CaptureChannel::addLevel(const char * buf, std::size_t size)
+{
+	float level = 0.0F;
+	switch (_alsaFormat) {
+		case SND_PCM_FORMAT_S16_LE: 
+			{
+				int16_t maxLevel = 0;
+				for (size_t i = 0U; i < size; i += 2U) {
+					const uint16_t frameLevel =
+						static_cast<const int16_t>(le16toh(*(reinterpret_cast<const uint16_t *>(buf + i))));
+					if (std::abs(frameLevel) > maxLevel) {
+						maxLevel = std::abs(frameLevel);
+					}
+				}
+				level = (float) maxLevel / 32768.0;
+    			}
+			break;
+/*		case SND_PCM_FORMAT_S32_LE:
+			itemsToWrite = size / 4;
+			itemsWritten = _file->write(reinterpret_cast<const int *>(buf), itemsToWrite);
+			break;
+		case SND_PCM_FORMAT_FLOAT_LE:
+			itemsToWrite = size / 4;
+			itemsWritten = _file->write(reinterpret_cast<const float *>(buf), itemsToWrite);
+			break;*/
+		default:
+			std::ostringstream msg;
+			msg << "WAV-file format is not supported: " << snd_pcm_format_name(_alsaFormat) <<
+				", " << snd_pcm_format_description(_alsaFormat);
+			std::cerr << "CaptureChannel::addLevel(): ERROR: " << msg.str() << std::endl;
+			throw std::runtime_error(msg.str());
+	}
+
+	_indicator.addMeasurement(level);
 }
 
 void CaptureChannel::write(const char * buf, std::size_t size)

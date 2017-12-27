@@ -10,9 +10,15 @@ public:
 
 	MainWindow(AudioProcessor& audioProcessor, const Glib::ustring& outputPath);
 private:
+	enum Const {
+		LevelRefreshIntervalMs = 100U
+	};
+
 	typedef std::vector<Gtk::ProgressBar *> LevelIndicators;
 
 	void on_record_button_clicked();
+
+	bool on_level_polling_timeout();
 
 	AudioProcessor& _audioProcessor;
 	const Glib::ustring _outputPath;

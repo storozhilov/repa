@@ -24,6 +24,9 @@ MainWindow::MainWindow(AudioProcessor& audioProcessor, const Glib::ustring& outp
 		hbox->pack_start(*_levelIndicators[i], Gtk::PACK_SHRINK);
 	}
 	show_all_children();
+
+	Glib::signal_timeout().connect(sigc::mem_fun(*this, &MainWindow::on_level_polling_timeout),
+			LevelRefreshIntervalMs);
 }
 
 void MainWindow::on_record_button_clicked()
@@ -38,4 +41,16 @@ void MainWindow::on_record_button_clicked()
 		std::clog << "NOTICE: MainWindow::on_record_button_clicked(): Recording stopped" << std::endl;
 		_recordButton.set_label("Start recording");
 	}
+}
+
+bool MainWindow::on_level_polling_timeout()
+{
+	for (std::size_t i = 0U; i < _audioProcessor.getCaptureChannels(); ++i) {
+		float level = _audioProcessor.getCaptureLevel(i, LevelRefreshIntervalMs);
+		//std::clog << "NOTICE: MainWindow::on_level_polling_timeout(): " << i <<
+		//	"-th channel level: " << level << std::endl;
+		_levelIndicators[i]->set_fraction(level);
+	}
+
+	return true;
 }

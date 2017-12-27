@@ -273,6 +273,11 @@ AudioProcessor::~AudioProcessor()
 	}
 }
 
+float AudioProcessor::getCaptureLevel(unsigned int channel, unsigned int ms)
+{
+	_captureChannels[channel]->getLevel(ms);
+}
+
 time_t AudioProcessor::startRecord(const std::string& location)
 {
 	// TODO: Check destination directory is writable.
@@ -530,18 +535,18 @@ void AudioProcessor::runCapturePostProcessing()
 			}
 
 			for (std::size_t i = 0U; i < captureChannelsCount; ++i) {
-				// TODO: Scanning & updating level
-				float level = 33.0F;
-				_captureChannels[i]->addLevel(level);
-
-				if (!isRecording) {
-					continue;
-				}
-
-				// Writing data to WAV-file
+				// Extracting WAV-data for channel
 				char * buf = &recordBuffer[i * _periodSize * bytesPerSample];
 				std::size_t size = _periodSize * bytesPerSample;
-				_captureChannels[i]->write(buf, size);
+
+				// Updating level
+				_captureChannels[i]->addLevel(buf, size);
+
+				if (isRecording) {
+					// Writing data to WAV-file
+					_captureChannels[i]->write(buf, size);
+				}
+
 			}
 
 			//std::clog << '+';

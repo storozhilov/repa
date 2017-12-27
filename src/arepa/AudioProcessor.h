@@ -29,6 +29,7 @@ public:
 	{
 		return _captureChannelsCount.load();
 	}
+	float getCaptureLevel(unsigned int channel, unsigned int ms);
 
 	time_t startRecord(const std::string& location);
 	void stopRecord();
