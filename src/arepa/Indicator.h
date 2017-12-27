@@ -24,9 +24,9 @@ public:
 	//~Indicator();
 
 	void addMeasurement(const T& value);
-	T getMax(std::size_t us, const T& defaultValue = T());
-	T getMean(std::size_t us);
-	T getMin(std::size_t us);
+	T getMax(std::size_t ms, const T& defaultValue = T());
+	T getMean(std::size_t ms);
+	T getMin(std::size_t ms);
 private:
 	struct Measurement
 	{
@@ -56,14 +56,15 @@ template <typename T> void Indicator<T>::addMeasurement(const T& value)
 	_history[offset].ts = boost::chrono::steady_clock::now();
 	_history[offset].value = value;
 
-	std::clog << "NOTICE: Indicator<T>::addMeasurement(" << value <<
-		"): Added '" << value << "' value using " << offset << " offset" << std::endl;
+	//std::clog << "NOTICE: Indicator<T>::addMeasurement(" << value << "): Added (" <<
+	//	boost::chrono::duration_cast<boost::chrono::milliseconds>(_history[offset].ts.time_since_epoch()) <<
+	//	", '" << value << "') measurement using " << offset << " offset" << std::endl;
 }
 
-template <typename T> T Indicator<T>::getMax(std::size_t us, const T& defaultValue)
+template <typename T> T Indicator<T>::getMax(std::size_t ms, const T& defaultValue)
 {
 	boost::chrono::steady_clock::time_point limit = boost::chrono::steady_clock::now() -
-		boost::chrono::milliseconds(us);
+		boost::chrono::milliseconds(ms);
 
 	std::size_t offset = _offset.load() % _historySize;
 
@@ -75,16 +76,18 @@ template <typename T> T Indicator<T>::getMax(std::size_t us, const T& defaultVal
 	while (true) {
 		offset = (offset == 0U) ? _historySize - 1U : offset - 1U;
 
-		if ((_history[offset].ts == nullTs) && (_history[offset].ts < limit)) {
+		if ((_history[offset].ts == nullTs) || (_history[offset].ts < limit)) {
 			break;
 		}
 
-		std::clog << ">>>> offset: " << offset << ", _history[offset].ts: " << _history[offset].ts << ", limit: " << limit <<
-			", _history[offset].value: " << _history[offset].value << std::endl;
-
+		//std::clog << ">>>> offset: " << offset << ", _history[offset].ts: " <<
+		//	boost::chrono::duration_cast<boost::chrono::milliseconds>(_history[offset].ts.time_since_epoch()) <<
+		//	", limit: " <<
+		//	boost::chrono::duration_cast<boost::chrono::milliseconds>(limit.time_since_epoch()) <<
+		//	", _history[offset].value: " << _history[offset].value << std::endl;
 
 		if (i > (_historySize / 2)) {
-			std::cerr << "WARNING: Indicator<T>::getMax(" << us << ", " << defaultValue <<
+			std::cerr << "WARNING: Indicator<T>::getMax(" << ms << ", " << defaultValue <<
 				"): Indicator overflow detected, increase history size" << std::endl;
 			break;
 		}
@@ -100,19 +103,21 @@ template <typename T> T Indicator<T>::getMax(std::size_t us, const T& defaultVal
 	}
 
 	if (!measurementFound) {
-		std::cerr << "WARNING: Indicator<T>::getMax(" << us << ", " << defaultValue <<
+		std::cerr << "WARNING: Indicator<T>::getMax(" << ms << ", " << defaultValue <<
 			"): No measurement found, returning default value" << std::endl;
 	}
 	return maxValue;
 }
 
-template <typename T> T Indicator<T>::getMean(std::size_t us)
+template <typename T> T Indicator<T>::getMean(std::size_t ms)
 {
+	// TODO: Implementation & test
 	return T();
 }
 
-template <typename T> T Indicator<T>::getMin(std::size_t us)
+template <typename T> T Indicator<T>::getMin(std::size_t ms)
 {
+	// TODO: Implementation & test
 	return T();
 }
 
