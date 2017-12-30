@@ -62,6 +62,8 @@ AudioProcessor::AudioProcessor(const char * device) :
 	_captureChannelsCount(),
 	_periodSize(),
 	_periodBufferSize(),
+	_recordStarted(),
+	_recordFinished(),
 	_captureRingBuffer(),
 	_captureCond(),
 	_captureMutex(),
@@ -496,6 +498,8 @@ void AudioProcessor::runCapturePostProcessing()
 		if (shouldCreateFiles) {
 			assert(!shouldCloseFiles);
 
+			_recordStarted.store(absoluteRecordOffset);
+
 			std::clog << "NOTICE: AudioProcessor::runCapturePostProcessing(): Start recording command received" << std::endl;
 			for (std::size_t i = 0; i < captureChannelsCount; ++i) {
 				std::ostringstream filename;
@@ -511,6 +515,8 @@ void AudioProcessor::runCapturePostProcessing()
 		// Closing WAV-files if needed
 		if (shouldCloseFiles) {
 			assert(!shouldCreateFiles);
+
+			_recordFinished.store(absoluteRecordOffset);
 
 			std::clog << "NOTICE: AudioProcessor::runCapturePostProcessing(): Stop recording command received" << std::endl;
 			for (std::size_t i = 0; i < captureChannelsCount; ++i) {

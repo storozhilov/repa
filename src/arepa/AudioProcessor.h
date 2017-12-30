@@ -30,6 +30,14 @@ public:
 		return _captureChannelsCount.load();
 	}
 	float getCaptureLevel(unsigned int channel);
+	inline std::size_t getRecordStarted() const
+	{
+		return _recordStarted.load();
+	}
+	inline std::size_t getRecordFinished() const
+	{
+		return _recordFinished.load();
+	}
 
 	time_t startRecord(const std::string& location);
 	void stopRecord();
@@ -54,6 +62,8 @@ private:
 	boost::atomic<unsigned int> _captureChannelsCount;
 	boost::atomic<unsigned int> _periodSize;
 	boost::atomic<std::size_t> _periodBufferSize;
+	boost::atomic<std::size_t> _recordStarted;
+	boost::atomic<std::size_t> _recordFinished;
 
 	Buffer _captureRingBuffer;
 
