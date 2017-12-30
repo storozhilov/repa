@@ -38,6 +38,10 @@ public:
 	{
 		return _recordFinished.load();
 	}
+	inline std::size_t getCapturedPeriods() const
+	{
+		return _capturedPeriods.load();
+	}
 
 	time_t startRecord(const std::string& location);
 	void stopRecord();
@@ -64,6 +68,7 @@ private:
 	boost::atomic<std::size_t> _periodBufferSize;
 	boost::atomic<std::size_t> _recordStarted;
 	boost::atomic<std::size_t> _recordFinished;
+	boost::atomic<std::size_t> _capturedPeriods;
 
 	Buffer _captureRingBuffer;
 

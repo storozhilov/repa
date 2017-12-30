@@ -27,16 +27,16 @@ public:
 	{
 		return _file;
 	}
-	void addLevel(const char * buf, std::size_t size);
+	void addLevel(std::size_t periodNumber, const char * buf, std::size_t size);
 	void write(const char * buf, std::size_t size);
 private:
-	typedef Diagram<float> DiagramType;
+	typedef Diagram<std::size_t, float> DiagramType;
 
 	unsigned int _rate;
 	snd_pcm_format_t _alsaFormat;
 	int _sfFormat;
 	DiagramType _diagram;
-	std::size_t _lastLevelCheckPeriodIndex;
+	std::size_t _lastLevelCheckPeriodNumber;
 	std::string _filename;
 	SndfileHandle * _file;
 };

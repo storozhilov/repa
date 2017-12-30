@@ -8,7 +8,7 @@ CaptureChannel::CaptureChannel(unsigned int rate, snd_pcm_format_t alsaFormat) :
 	_alsaFormat(alsaFormat),
 	_sfFormat(SF_FORMAT_WAV),
 	_diagram(DiagramHistorySize),
-	_lastLevelCheckPeriodIndex(0U),
+	_lastLevelCheckPeriodNumber(0U),
 	_filename(),
 	_file(0)
 {
@@ -42,15 +42,17 @@ CaptureChannel::~CaptureChannel()
 
 float CaptureChannel::getLevel()
 {
-	float maxValue = 0.0F;
-	_lastLevelCheckPeriodIndex = _diagram.forEach(
-		(_lastLevelCheckPeriodIndex > 0U) ? _lastLevelCheckPeriodIndex + 1U : 0U,
+	auto maxValue = 0.0F;
+	auto periodNumber = _diagram.getIndex();
+	_diagram.forEach(
+		_lastLevelCheckPeriodNumber, periodNumber,
 		[&maxValue](std::size_t index, float value) {
 			if (value > maxValue) {
 				maxValue = value;
 			}
 		}
 	);
+	_lastLevelCheckPeriodNumber = periodNumber;
 	return maxValue;
 }
 
@@ -80,7 +82,7 @@ void CaptureChannel::closeFile()
 	_file = 0;
 }
 
-void CaptureChannel::addLevel(const char * buf, std::size_t size)
+void CaptureChannel::addLevel(std::size_t periodNumber, const char * buf, std::size_t size)
 {
 	float level = 0.0F;
 	switch (_alsaFormat) {
@@ -111,7 +113,7 @@ void CaptureChannel::addLevel(const char * buf, std::size_t size)
 			throw std::runtime_error(msg.str());
 	}
 
-	_diagram.addMeasurement(level);
+	_diagram.addMeasurement(periodNumber, level);
 }
 
 void CaptureChannel::write(const char * buf, std::size_t size)

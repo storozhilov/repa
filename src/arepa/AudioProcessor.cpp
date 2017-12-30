@@ -64,6 +64,7 @@ AudioProcessor::AudioProcessor(const char * device) :
 	_periodBufferSize(),
 	_recordStarted(),
 	_recordFinished(),
+	_capturedPeriods(0U),
 	_captureRingBuffer(),
 	_captureCond(),
 	_captureMutex(),
@@ -545,14 +546,15 @@ void AudioProcessor::runCapturePostProcessing()
 				char * buf = &recordBuffer[i * _periodSize * bytesPerSample];
 				std::size_t size = _periodSize * bytesPerSample;
 
+				auto periodNumber = _capturedPeriods.fetch_add(1U) + 1U;
+
 				// Updating level
-				_captureChannels[i]->addLevel(buf, size);
+				_captureChannels[i]->addLevel(periodNumber, buf, size);
 
 				if (isRecording) {
 					// Writing data to WAV-file
 					_captureChannels[i]->write(buf, size);
 				}
-
 			}
 
 			//std::clog << '+';
