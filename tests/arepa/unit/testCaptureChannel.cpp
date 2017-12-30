@@ -19,7 +19,7 @@ public:
 
 TEST_F(CaptureChannelTest, CreateAndCloseFile)
 {
-	std::auto_ptr<CaptureChannel> cc(new CaptureChannel(44100, SND_PCM_FORMAT_S16_LE));
+	std::unique_ptr<CaptureChannel> cc(new CaptureChannel(44100, SND_PCM_FORMAT_S16_LE));
 	cc->openFile("tmp_tests/capture_channel_test_file.wav");
 	cc->closeFile();
 	EXPECT_EQ(system("stat tmp_tests/capture_channel_test_file.wav"), 0);

@@ -9,8 +9,8 @@ class WaveForm;
 class MainWindow : public Gtk::Window
 {
 public:
-
 	MainWindow(AudioProcessor& audioProcessor, const Glib::ustring& outputPath);
+	virtual ~MainWindow();
 private:
 	enum Const {
 		LevelRefreshIntervalMs = 100U
@@ -18,6 +18,18 @@ private:
 
 	typedef std::vector<Gtk::ProgressBar *> LevelIndicators;
 	typedef std::vector<WaveForm *> WaveForms;
+	struct Recording {
+		Recording(unsigned int channelsCount, std::size_t started) :
+			waveForms(channelsCount),
+			started(started),
+			finished(0U)
+		{}
+
+		WaveForms waveForms;
+		std::size_t started;
+		std::size_t finished;
+	};
+	typedef std::list<Recording *> Recordings;
 
 	void on_record_button_clicked();
 
@@ -27,12 +39,15 @@ private:
 	const Glib::ustring _outputPath;
 
 	bool _isRecording;
+	std::size_t _recordingStarted;
+	std::size_t _recordingFinished;
 
 	Gtk::VBox _vbox;
 	Gtk::HButtonBox _buttonBox;
 	Gtk::Button _recordButton;
 	LevelIndicators _levelIndicators;
-	WaveForms _waveForms;
+	std::vector<Gtk::HBox *> _channelsHBoxes;
+	Recordings _recordings;
 };
 
 #endif

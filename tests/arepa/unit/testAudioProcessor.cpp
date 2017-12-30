@@ -25,7 +25,7 @@ public:
 		//EXPECT_EQ(system("rm -Rf tmp_tests"), 0);
 	}
 
-	std::auto_ptr<AudioProcessor> _ap;
+	std::unique_ptr<AudioProcessor> _ap;
 };
 
 TEST_F(AudioProcessorTest, RecordToInvalidLocation)
