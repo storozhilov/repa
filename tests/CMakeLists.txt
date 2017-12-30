@@ -1,5 +1,7 @@
 project(test_repa)
 
+set(CMAKE_CXX_STANDARD 11)
+
 # Enable ExternalProject CMake module
 include(ExternalProject)
 

@@ -2,6 +2,7 @@
 #define __AREPA__CAPTURE_CHANNEL_H
 
 #include "Indicator.h"
+#include "Diagram.h"
 
 #define ALSA_PCM_NEW_HW_PARAMS_API
 #include <alsa/asoundlib.h>
@@ -12,14 +13,13 @@ class CaptureChannel
 {
 public:
 	enum Consts {
-		IndicatorHistorySize = 1024
+		DiagramHistorySize = 1024
 	};
 
 	CaptureChannel(unsigned int rate, snd_pcm_format_t alsaFormat);
 	~CaptureChannel();
 
-	//void addLevel(float level);
-	float getLevel(std::size_t ms);
+	float getLevel();
 
 	void openFile(const std::string& filename);
 	void closeFile();
@@ -30,12 +30,13 @@ public:
 	void addLevel(const char * buf, std::size_t size);
 	void write(const char * buf, std::size_t size);
 private:
-	typedef Indicator<float> IndicatorType;
+	typedef Diagram<float> DiagramType;
 
 	unsigned int _rate;
 	snd_pcm_format_t _alsaFormat;
 	int _sfFormat;
-	IndicatorType _indicator;
+	DiagramType _diagram;
+	std::size_t _lastLevelCheckPeriodIndex;
 	std::string _filename;
 	SndfileHandle * _file;
 };

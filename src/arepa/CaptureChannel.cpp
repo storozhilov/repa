@@ -7,7 +7,8 @@ CaptureChannel::CaptureChannel(unsigned int rate, snd_pcm_format_t alsaFormat) :
 	_rate(rate),
 	_alsaFormat(alsaFormat),
 	_sfFormat(SF_FORMAT_WAV),
-	_indicator(IndicatorHistorySize),
+	_diagram(DiagramHistorySize),
+	_lastLevelCheckPeriodIndex(0U),
 	_filename(),
 	_file(0)
 {
@@ -39,14 +40,18 @@ CaptureChannel::~CaptureChannel()
 	}
 }
 
-/*void CaptureChannel::addLevel(float level)
+float CaptureChannel::getLevel()
 {
-	_indicator.addMeasurement(level);
-}*/
-
-float CaptureChannel::getLevel(std::size_t ms)
-{
-	return _indicator.getMax(ms);
+	float maxValue = 0.0F;
+	_lastLevelCheckPeriodIndex = _diagram.forEach(
+		(_lastLevelCheckPeriodIndex > 0U) ? _lastLevelCheckPeriodIndex + 1U : 0U,
+		[&maxValue](std::size_t index, float value) {
+			if (value > maxValue) {
+				maxValue = value;
+			}
+		}
+	);
+	return maxValue;
 }
 
 void CaptureChannel::openFile(const std::string& filename)
@@ -93,12 +98,10 @@ void CaptureChannel::addLevel(const char * buf, std::size_t size)
     			}
 			break;
 /*		case SND_PCM_FORMAT_S32_LE:
-			itemsToWrite = size / 4;
-			itemsWritten = _file->write(reinterpret_cast<const int *>(buf), itemsToWrite);
+			// TODO
 			break;
 		case SND_PCM_FORMAT_FLOAT_LE:
-			itemsToWrite = size / 4;
-			itemsWritten = _file->write(reinterpret_cast<const float *>(buf), itemsToWrite);
+			// TODO
 			break;*/
 		default:
 			std::ostringstream msg;
@@ -108,7 +111,7 @@ void CaptureChannel::addLevel(const char * buf, std::size_t size)
 			throw std::runtime_error(msg.str());
 	}
 
-	_indicator.addMeasurement(level);
+	_diagram.addMeasurement(level);
 }
 
 void CaptureChannel::write(const char * buf, std::size_t size)

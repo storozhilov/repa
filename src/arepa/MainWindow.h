@@ -4,6 +4,8 @@
 #include "AudioProcessor.h"
 #include <gtkmm.h>
 
+class WaveForm;
+
 class MainWindow : public Gtk::Window
 {
 public:
@@ -15,6 +17,7 @@ private:
 	};
 
 	typedef std::vector<Gtk::ProgressBar *> LevelIndicators;
+	typedef std::vector<WaveForm *> WaveForms;
 
 	void on_record_button_clicked();
 
@@ -29,6 +32,7 @@ private:
 	Gtk::HButtonBox _buttonBox;
 	Gtk::Button _recordButton;
 	LevelIndicators _levelIndicators;
+	WaveForms _waveForms;
 };
 
 #endif

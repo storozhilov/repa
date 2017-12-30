@@ -273,9 +273,9 @@ AudioProcessor::~AudioProcessor()
 	}
 }
 
-float AudioProcessor::getCaptureLevel(unsigned int channel, unsigned int ms)
+float AudioProcessor::getCaptureLevel(unsigned int channel)
 {
-	_captureChannels[channel]->getLevel(ms);
+	_captureChannels[channel]->getLevel();
 }
 
 time_t AudioProcessor::startRecord(const std::string& location)
