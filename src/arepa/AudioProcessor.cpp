@@ -62,8 +62,8 @@ AudioProcessor::AudioProcessor(const char * device) :
 	_captureChannelsCount(),
 	_periodSize(),
 	_periodBufferSize(),
-	_recordStarted(),
-	_recordFinished(),
+	_recordStartedPeriod(),
+	_recordFinishedPeriod(),
 	_capturedPeriods(0U),
 	_captureRingBuffer(),
 	_captureCond(),
@@ -276,9 +276,9 @@ AudioProcessor::~AudioProcessor()
 	}
 }
 
-float AudioProcessor::getCaptureLevel(unsigned int channel)
+float AudioProcessor::getCaptureLevel(unsigned int channel, std::size_t after, std::size_t end)
 {
-	_captureChannels[channel]->getLevel();
+	_captureChannels[channel]->getLevel(after, end);
 }
 
 time_t AudioProcessor::startRecord(const std::string& location)
@@ -499,7 +499,7 @@ void AudioProcessor::runCapturePostProcessing()
 		if (shouldCreateFiles) {
 			assert(!shouldCloseFiles);
 
-			_recordStarted.store(absoluteRecordOffset);
+			_recordStartedPeriod.store(absoluteRecordOffset + 1U);
 
 			std::clog << "NOTICE: AudioProcessor::runCapturePostProcessing(): Start recording command received" << std::endl;
 			for (std::size_t i = 0; i < captureChannelsCount; ++i) {
@@ -517,7 +517,7 @@ void AudioProcessor::runCapturePostProcessing()
 		if (shouldCloseFiles) {
 			assert(!shouldCreateFiles);
 
-			_recordFinished.store(absoluteRecordOffset);
+			_recordFinishedPeriod.store(absoluteRecordOffset + 1U);
 
 			std::clog << "NOTICE: AudioProcessor::runCapturePostProcessing(): Stop recording command received" << std::endl;
 			for (std::size_t i = 0; i < captureChannelsCount; ++i) {
@@ -546,10 +546,10 @@ void AudioProcessor::runCapturePostProcessing()
 				char * buf = &recordBuffer[i * _periodSize * bytesPerSample];
 				std::size_t size = _periodSize * bytesPerSample;
 
-				auto periodNumber = _capturedPeriods.fetch_add(1U) + 1U;
+				_capturedPeriods.store(absoluteRecordOffset + 1U);
 
 				// Updating level
-				_captureChannels[i]->addLevel(periodNumber, buf, size);
+				_captureChannels[i]->addLevel(absoluteRecordOffset + 1U, buf, size);
 
 				if (isRecording) {
 					// Writing data to WAV-file

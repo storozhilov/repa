@@ -38,12 +38,12 @@ TEST_F(AudioProcessorTest, RecordASecond)
 	unsigned int captureChannels = _ap->getCaptureChannels();
 	ASSERT_GT(captureChannels, 0U);
 	time_t recordTs = _ap->startRecord("tmp_tests");
-	std::size_t recordStarted = _ap->getRecordStarted();
-	EXPECT_GT(recordStarted, 0U);
+	std::size_t recordStartedPeriod = _ap->getRecordStartedPeriod();
+	EXPECT_GT(recordStartedPeriod, 0U);
 	boost::this_thread::sleep_for(boost::chrono::milliseconds(1 * 1000));
 	_ap->stopRecord();
-	std::size_t recordFinished = _ap->getRecordFinished();
-	EXPECT_GT(recordFinished, recordStarted);
+	std::size_t recordFinishedPeriod = _ap->getRecordFinishedPeriod();
+	EXPECT_GT(recordFinishedPeriod, recordStartedPeriod);
 
 	uintmax_t fileSize = 0U;
 	for (unsigned int i = 0U; i < captureChannels; ++i) {

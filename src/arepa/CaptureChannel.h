@@ -19,7 +19,7 @@ public:
 	CaptureChannel(unsigned int rate, snd_pcm_format_t alsaFormat);
 	~CaptureChannel();
 
-	float getLevel();
+	float getLevel(std::size_t after, std::size_t end);
 
 	void openFile(const std::string& filename);
 	void closeFile();

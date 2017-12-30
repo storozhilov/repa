@@ -13,7 +13,8 @@ public:
 	virtual ~MainWindow();
 private:
 	enum Const {
-		LevelRefreshIntervalMs = 100U
+		LevelRefreshIntervalMs = 100U,
+		WaveFormRefreshIntervalMs = 1000U
 	};
 
 	typedef std::vector<Gtk::ProgressBar *> LevelIndicators;
@@ -34,13 +35,16 @@ private:
 	void on_record_button_clicked();
 
 	bool on_level_polling_timeout();
+	bool on_waveforms_update_timeout();
 
 	AudioProcessor& _audioProcessor;
 	const Glib::ustring _outputPath;
 
 	bool _isRecording;
-	std::size_t _recordingStarted;
-	std::size_t _recordingFinished;
+	std::size_t _recordingStartedPeriod;
+	std::size_t _recordingFinishedPeriod;
+	std::size_t _recordingExposedPeriod;
+	std::size_t _volumeScannedPeriod;
 
 	Gtk::VBox _vbox;
 	Gtk::HButtonBox _buttonBox;

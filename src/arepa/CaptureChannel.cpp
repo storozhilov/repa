@@ -8,7 +8,6 @@ CaptureChannel::CaptureChannel(unsigned int rate, snd_pcm_format_t alsaFormat) :
 	_alsaFormat(alsaFormat),
 	_sfFormat(SF_FORMAT_WAV),
 	_diagram(DiagramHistorySize),
-	_lastLevelCheckPeriodNumber(0U),
 	_filename(),
 	_file(0)
 {
@@ -40,19 +39,17 @@ CaptureChannel::~CaptureChannel()
 	}
 }
 
-float CaptureChannel::getLevel()
+float CaptureChannel::getLevel(std::size_t after, std::size_t end)
 {
 	auto maxValue = 0.0F;
-	auto periodNumber = _diagram.getIndex();
 	_diagram.forEach(
-		_lastLevelCheckPeriodNumber, periodNumber,
+		after, end,
 		[&maxValue](std::size_t index, float value) {
 			if (value > maxValue) {
 				maxValue = value;
 			}
 		}
 	);
-	_lastLevelCheckPeriodNumber = periodNumber;
 	return maxValue;
 }
 

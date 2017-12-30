@@ -6,8 +6,10 @@ MainWindow::MainWindow(AudioProcessor& audioProcessor, const Glib::ustring& outp
 	_audioProcessor(audioProcessor),
 	_outputPath(outputPath),
 	_isRecording(false),
-	_recordingStarted(0U),
-	_recordingFinished(0U),
+	_recordingStartedPeriod(0U),
+	_recordingFinishedPeriod(0U),
+	_recordingExposedPeriod(0U),
+	_volumeScannedPeriod(0U),
 	_vbox(false, 6),
 	_buttonBox(Gtk::BUTTONBOX_START, 6),
 	_recordButton("Start recording"),
@@ -46,9 +48,13 @@ void MainWindow::on_record_button_clicked()
 	_isRecording = !_isRecording;
 	if (_isRecording) {
 		_audioProcessor.startRecord(_outputPath);
-		_recordingStarted = _audioProcessor.getRecordStarted();
+		_recordingStartedPeriod = _audioProcessor.getRecordStartedPeriod();
+		_recordingExposedPeriod = _recordingStartedPeriod - 1U;
 
-		std::unique_ptr<Recording> recording(new Recording(_audioProcessor.getCaptureChannels(), _recordingStarted));
+		Glib::signal_timeout().connect(sigc::mem_fun(*this, &MainWindow::on_waveforms_update_timeout),
+				WaveFormRefreshIntervalMs);
+
+		std::unique_ptr<Recording> recording(new Recording(_audioProcessor.getCaptureChannels(), _recordingStartedPeriod));
 		for (auto i = 0U; i < _audioProcessor.getCaptureChannels(); ++i) {
 			recording->waveForms[i] = manage(new WaveForm());
 			//_channelsHBoxes[i]->pack_start(*recording->waveForms[i], Gtk::PACK_EXPAND_WIDGET);
@@ -63,7 +69,7 @@ void MainWindow::on_record_button_clicked()
 		_recordButton.set_label("Stop recording");
 	} else {
 		_audioProcessor.stopRecord();
-		_recordingFinished = _audioProcessor.getRecordFinished();
+		_recordingFinishedPeriod = _audioProcessor.getRecordFinishedPeriod();
 		std::clog << "NOTICE: MainWindow::on_record_button_clicked(): Recording stopped" << std::endl;
 		_recordButton.set_label("Start recording");
 	}
@@ -71,10 +77,24 @@ void MainWindow::on_record_button_clicked()
 
 bool MainWindow::on_level_polling_timeout()
 {
+	std::size_t capturedPeriods = _audioProcessor.getCapturedPeriods();
 	for (std::size_t i = 0U; i < _audioProcessor.getCaptureChannels(); ++i) {
-		float level = _audioProcessor.getCaptureLevel(i);
+		float level = _audioProcessor.getCaptureLevel(i, _volumeScannedPeriod, capturedPeriods);
 		_levelIndicators[i]->set_fraction(level);
 	}
-
+	_volumeScannedPeriod = capturedPeriods;
 	return true;
+}
+
+bool MainWindow::on_waveforms_update_timeout()
+{
+	std::size_t capturedPeriods = _audioProcessor.getCapturedPeriods();
+	std::size_t newExposedPeriod = _isRecording ? capturedPeriods : _recordingFinishedPeriod;
+	for (std::size_t i = 0U; i < _audioProcessor.getCaptureChannels(); ++i) {
+		float level = _audioProcessor.getCaptureLevel(i, _recordingExposedPeriod, newExposedPeriod);
+		std::cout << i << "-th channel volume: " << level << std::endl;
+		// TODO: Update WaveForm
+	}
+	_recordingExposedPeriod = newExposedPeriod;
+	return _isRecording;
 }
