@@ -86,14 +86,14 @@ void CaptureChannel::addLevel(std::size_t periodNumber, const char * buf, std::s
 		case SND_PCM_FORMAT_S16_LE: 
 			{
 				int16_t maxLevel = 0;
-				for (size_t i = 0U; i < size; i += 2U) {
-					const uint16_t frameLevel =
+				for (size_t i = 0U; i < size; i += sizeof(int16_t)) {
+					const int16_t frameLevel =
 						static_cast<const int16_t>(le16toh(*(reinterpret_cast<const uint16_t *>(buf + i))));
 					if (std::abs(frameLevel) > maxLevel) {
 						maxLevel = std::abs(frameLevel);
 					}
 				}
-				level = (float) maxLevel / 32768.0;
+				level = (float) maxLevel / (float) std::numeric_limits<int16_t>::max();
     			}
 			break;
 /*		case SND_PCM_FORMAT_S32_LE:

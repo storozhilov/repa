@@ -36,7 +36,6 @@ private:
 	snd_pcm_format_t _alsaFormat;
 	int _sfFormat;
 	DiagramType _diagram;
-	std::size_t _lastLevelCheckPeriodNumber;
 	std::string _filename;
 	SndfileHandle * _file;
 };
