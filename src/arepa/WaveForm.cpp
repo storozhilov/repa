@@ -3,15 +3,21 @@
 #include <iostream>
 
 WaveForm::WaveForm() :
-	Gtk::DrawingArea()
+	Gtk::DrawingArea(),
+	_levels()
 {
 #ifndef GLIBMM_DEFAULT_SIGNAL_HANDLERS_ENABLED
 	signal_expose_event().connect(sigc::mem_fun(*this, &WaveForm::on_expose_event), false);
 #endif //GLIBMM_DEFAULT_SIGNAL_HANDLERS_ENABLED
 }
 
-void WaveForm::addLevel(std::size_t frameIndex, float level)
-{}
+void WaveForm::addLevel(float level)
+{
+	_levels.push_back(level);
+
+	// TODO: Extend waveform
+	set_size_request(_levels.size(), -1);
+}
 
 bool WaveForm::on_expose_event(GdkEventExpose * event)
 {

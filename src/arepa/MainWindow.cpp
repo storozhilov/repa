@@ -94,6 +94,7 @@ bool MainWindow::on_waveforms_update_timeout()
 		float level = _audioProcessor.getCaptureLevel(i, _recordingExposedPeriod, newExposedPeriod);
 		std::cout << i << "-th channel volume: " << level << std::endl;
 		// TODO: Update WaveForm
+		_recordings.back()->waveForms[i]->addLevel(level);
 	}
 	_recordingExposedPeriod = newExposedPeriod;
 	return _isRecording;
