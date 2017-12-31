@@ -94,12 +94,22 @@ void CaptureChannel::addLevel(std::size_t periodNumber, const char * buf, std::s
 					}
 				}
 				level = (float) maxLevel / (float) std::numeric_limits<int16_t>::max();
-    			}
+			}
 			break;
-/*		case SND_PCM_FORMAT_S32_LE:
-			// TODO
+		case SND_PCM_FORMAT_S32_LE:
+			{
+				int32_t maxLevel = 0;
+				for (size_t i = 0U; i < size; i += sizeof(int32_t)) {
+					const int32_t frameLevel =
+						static_cast<const int32_t>(le32toh(*(reinterpret_cast<const uint32_t *>(buf + i))));
+					if (std::abs(frameLevel) > maxLevel) {
+						maxLevel = std::abs(frameLevel);
+					}
+				}
+				level = (float) maxLevel / (float) std::numeric_limits<int32_t>::max();
+			}
 			break;
-		case SND_PCM_FORMAT_FLOAT_LE:
+/*		case SND_PCM_FORMAT_FLOAT_LE:
 			// TODO
 			break;*/
 		default:
