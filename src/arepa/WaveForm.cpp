@@ -1,6 +1,7 @@
 #include "WaveForm.h"
 
 #include <iostream>
+#include <cassert>
 
 WaveForm::WaveForm() :
 	Gtk::DrawingArea(),
@@ -14,32 +15,38 @@ WaveForm::WaveForm() :
 void WaveForm::addLevel(float level)
 {
 	_levels.push_back(level);
-
-	// TODO: Extend waveform
 	set_size_request(_levels.size(), -1);
 }
 
 bool WaveForm::on_expose_event(GdkEventExpose * event)
 {
-	std::clog << "WaveForm::on_expose_event() event fired" << std::endl;
 	Glib::RefPtr<Gdk::Window> window = get_window();
 	if (!window) {
 		return true;
 	}
-	Gtk::Allocation allocation = get_allocation();
-	const int width = allocation.get_width();
-	const int height = allocation.get_height();
 
-	std::clog << "WaveForm::on_expose_event() event fired in (" <<
-		width << ", " << height << ") rectangle using event rectangle: (" <<
-		event->area.width << ", " << event->area.height << ")" << std::endl;
+	Gtk::Allocation allocation = get_allocation();
+	auto width = allocation.get_width();
+	auto height = allocation.get_height();
+	assert(_levels.size() == 0U || width == _levels.size());
 
 	Cairo::RefPtr<Cairo::Context> cr = window->create_cairo_context();
 	cr->rectangle(event->area.x, event->area.y, event->area.width, event->area.height);
 	cr->clip();
 
-	//cr->set_line_width(10.0);
-	//cr->set_source_rgb(0.8, 0.0, 0.0);
-	cr->rectangle(0, 0, width, height);
-	cr->stroke();
+	auto waveFormColor = get_style()->get_dark(Gtk::STATE_INSENSITIVE);
+	cr->set_source_rgb(
+			static_cast<float>(waveFormColor.get_red()) / static_cast<float>(std::numeric_limits<gushort>::max()),
+			static_cast<float>(waveFormColor.get_green()) / static_cast<float>(std::numeric_limits<gushort>::max()),
+			static_cast<float>(waveFormColor.get_blue()) / static_cast<float>(std::numeric_limits<gushort>::max()));
+
+	for (auto i = 0U; i < _levels.size(); ++i) {
+		auto topY = static_cast<int>(
+				(static_cast<float>(height) - static_cast<float>(height) * _levels[i]) / 2.0F);
+		auto bottomY = height - topY;
+		cr->move_to(i, topY);
+		cr->line_to(i, (topY == bottomY) ? bottomY + 1U : bottomY);
+		cr->stroke_preserve();
+	}
+	return true;
 }
