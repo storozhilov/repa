@@ -74,10 +74,8 @@ private:
 
 	boost::condition_variable _captureCond;
 	boost::mutex _captureMutex;
-	std::size_t _captureOffset;
-	std::size_t _ringsCaptured;
-	std::size_t _recordOffset;
-	std::size_t _ringsRecorded;
+	std::size_t _periodsCaptured;
+	std::size_t _periodsRecorded;
 };
 
 #endif
