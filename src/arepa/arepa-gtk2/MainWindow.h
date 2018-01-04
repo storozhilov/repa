@@ -1,7 +1,7 @@
 #ifndef __AREPA__MAIN_WINDOW_H
 #define __AREPA__MAIN_WINDOW_H
 
-#include "AudioProcessor.h"
+#include "../AudioProcessor.h"
 #include <gtkmm.h>
 
 class WaveForm;

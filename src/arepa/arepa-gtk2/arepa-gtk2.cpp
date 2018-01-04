@@ -1,4 +1,4 @@
-#include "AudioProcessor.h"
+#include "../AudioProcessor.h"
 #include "MainWindow.h"
 
 #include <iostream>
