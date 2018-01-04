@@ -64,7 +64,7 @@ private:
 	boost::atomic<unsigned int> _rate;
 	boost::atomic<unsigned int> _bytesPerSample;
 	boost::atomic<unsigned int> _captureChannelsCount;
-	boost::atomic<unsigned int> _periodSize;
+	boost::atomic<unsigned int> _framesInPeriod;
 	boost::atomic<std::size_t> _periodBufferSize;
 	boost::atomic<std::size_t> _recordStartedPeriod;
 	boost::atomic<std::size_t> _recordFinishedPeriod;
@@ -88,10 +88,8 @@ private:
 	State _state;
 	std::string _filesLocation;
 	time_t _recordTs;
-	std::size_t _captureOffset;
-	std::size_t _ringsCaptured;
-	std::size_t _recordOffset;
-	std::size_t _ringsRecorded;
+	std::size_t _periodsCaptured;
+	std::size_t _periodsProcessed;
 };
 
 #endif
