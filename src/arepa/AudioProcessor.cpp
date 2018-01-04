@@ -16,39 +16,6 @@ namespace
 // TODO: Make it configurable
 std::size_t const PeriodsInBuffer = 1024U;
 
-class AlsaCleaner {
-public:
-	AlsaCleaner(snd_pcm_t * handle) :
-		_handle(handle)
-	{}
-
-	~AlsaCleaner()
-	{
-		if (_handle == 0) {
-			return;
-		}
-
-		int rc = snd_pcm_drain(_handle);
-		if (rc < 0) {
-			std::ostringstream msg;
-			msg << "Stopping PCM device error: " << snd_strerror(rc);
-			throw std::runtime_error(msg.str());
-		}
-		rc = snd_pcm_close(_handle);
-		if (rc < 0) {
-			std::ostringstream msg;
-			msg << "Closing PCM device error: " << snd_strerror(rc);
-			throw std::runtime_error(msg.str());
-		}
-	}
-
-	void release() {
-		_handle = 0;
-	}
-private:
-	snd_pcm_t * _handle;
-};
-
 }
 
 AudioProcessor::AudioProcessor(const char * device) :
