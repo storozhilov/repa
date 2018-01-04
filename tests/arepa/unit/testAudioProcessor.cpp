@@ -16,7 +16,7 @@ public:
 		//_ap.reset(new AudioProcessor("virtmic"));
 		//_ap.reset(new AudioProcessor("default"));
 		_ap.reset(new AudioProcessor("hw"));
-		boost::this_thread::sleep_for(boost::chrono::milliseconds(100));
+		//boost::this_thread::sleep_for(boost::chrono::milliseconds(100));
 	}
 
 	virtual void TearDown()

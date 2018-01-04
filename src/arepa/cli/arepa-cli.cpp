@@ -45,8 +45,6 @@ int main(int argc, char * argv[]) {
 	std::signal(SIGINT, signal_handler);
 
 	AudioProcessor ap(device.c_str());
-	// Awaiting for threads to start. TODO: Get rid of this!
-	boost::this_thread::sleep(boost::posix_time::milliseconds(500));
 	ap.startRecord(location);
 	while (!static_cast<bool>(stopped)) {
 		boost::this_thread::sleep(boost::posix_time::milliseconds(100));

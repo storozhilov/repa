@@ -205,6 +205,12 @@ AudioProcessor::AudioProcessor(const char * device) :
 	_state = CaptureStartingState;
 	_captureThread = boost::thread(boost::bind(&AudioProcessor::runCapture, this));
 	_capturePostProcessingThread = boost::thread(boost::bind(&AudioProcessor::runCapturePostProcessing, this));
+
+	// Awaiting for threads to start-up
+	boost::unique_lock<boost::mutex> lock(_captureMutex);
+	while (_state != CaptureState) {
+		_captureCond.wait(lock);
+	}
 }
 
 AudioProcessor::~AudioProcessor()
