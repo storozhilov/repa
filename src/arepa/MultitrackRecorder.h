@@ -67,17 +67,15 @@ private:
 	boost::atomic<unsigned int> _rate;
 	boost::atomic<unsigned int> _bytesPerSample;
 	boost::atomic<unsigned int> _channels;
-	boost::atomic<unsigned int> _periodSize;
+	boost::atomic<unsigned int> _framesInPeriod;
 	boost::atomic<std::size_t> _periodBufferSize;
 
 	Buffer _captureRingBuffer;
 
 	boost::condition_variable _captureCond;
 	boost::mutex _captureMutex;
-	std::size_t _captureOffset;
-	std::size_t _ringsCaptured;
-	std::size_t _recordOffset;
-	std::size_t _ringsRecorded;
+	std::size_t _periodsCaptured;
+	std::size_t _periodsRecorded;
 };
 
 #endif
