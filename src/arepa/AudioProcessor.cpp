@@ -469,26 +469,25 @@ void AudioProcessor::runCapturePostProcessing()
 			}
 
 			// Copying data to record buffer
-			for (std::size_t i = 0; i < (framesCaptured * _captureChannelsCount * _bytesPerSample); i += _bytesPerSample) {
-				std::size_t frame = i / _bytesPerSample / _captureChannelsCount;
-				std::size_t channel = i / _bytesPerSample % _captureChannelsCount;
-				std::size_t j = (frame + channel * _framesInPeriod) * _bytesPerSample;
+			for (std::size_t frame = 0U; frame < framesCaptured; ++frame) {
+				for (std::size_t channel = 0U; channel < _captureChannelsCount; ++channel) {
+					char * sourcePtr = ringBufferPtr + ringBufferOffset + sizeof(std::size_t) +
+						(frame * _captureChannelsCount + channel) * _bytesPerSample;
+					char * destPtr = recordBufferPtr + (frame + channel * _framesInPeriod) * _bytesPerSample;
 
-				switch (_bytesPerSample) {
-					case 2U:
-						*reinterpret_cast<int16_t *>(recordBufferPtr + j) =
-							*reinterpret_cast<int16_t *>(ringBufferPtr + ringBufferOffset + i + sizeof(std::size_t));
-						break;
-					case 4U:
-						*reinterpret_cast<int32_t *>(recordBufferPtr + j) =
-							*reinterpret_cast<int32_t *>(ringBufferPtr + ringBufferOffset + i + sizeof(std::size_t));
-						break;
-					default:
-						std::ostringstream msg;
-						msg << "Bytes per sample (" << _bytesPerSample << ") not supported";
-						throw std::runtime_error(msg.str());
+					switch (_bytesPerSample) {
+						case 2U:
+							*reinterpret_cast<int16_t *>(destPtr) = *reinterpret_cast<int16_t *>(sourcePtr);
+							break;
+						case 4U:
+							*reinterpret_cast<int32_t *>(destPtr) = *reinterpret_cast<int32_t *>(sourcePtr);
+							break;
+						default:
+							std::ostringstream msg;
+							msg << "Bytes per sample (" << _bytesPerSample << ") not supported";
+							throw std::runtime_error(msg.str());
+					}
 				}
-
 			}
 
 			++periodsProcessed;
