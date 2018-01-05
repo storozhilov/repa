@@ -9,8 +9,6 @@
 #include <sndfile.hh>
 
 #include <vector>
-#include <queue>
-#include <map>
 
 #include <boost/atomic.hpp>
 #include <boost/thread.hpp>
