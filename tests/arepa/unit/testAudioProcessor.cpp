@@ -30,7 +30,7 @@ public:
 
 TEST_F(AudioProcessorTest, RecordToInvalidLocation)
 {
-	ASSERT_THROW(_ap->startRecord("/foo/bar"), std::runtime_error);
+	ASSERT_THROW(_ap->startRecord("/foo/bar/location", "foobar_prefix."), std::runtime_error);
 }
 
 TEST_F(AudioProcessorTest, RecordASecond)
@@ -38,7 +38,9 @@ TEST_F(AudioProcessorTest, RecordASecond)
 	unsigned int captureChannels = _ap->getCaptureChannels();
 	ASSERT_GT(captureChannels, 0U);
 
-	time_t recordTs = _ap->startRecord("tmp_tests");
+	std::ostringstream filenamePrefix;
+	filenamePrefix << "record_" << time(0) << '.';
+	_ap->startRecord("tmp_tests", filenamePrefix.str().c_str());
 
 	std::size_t recordStartedFrame = _ap->getRecordStartedFrame();
 	EXPECT_GT(recordStartedFrame, 0U);
@@ -58,7 +60,7 @@ TEST_F(AudioProcessorTest, RecordASecond)
 	uintmax_t fileSize = 0U;
 	for (unsigned int i = 0U; i < captureChannels; ++i) {
 		std::ostringstream filename;
-		filename << "tmp_tests/record_" << recordTs << ".track_" << std::setfill('0') << std::setw(2) << (i + 1) << ".wav";
+		filename << "tmp_tests/" << filenamePrefix.str() << "track_" << std::setfill('0') << std::setw(2) << (i + 1) << ".wav";
 
 		boost::filesystem::file_status s = boost::filesystem::status(filename.str());
 		EXPECT_EQ(s.type(), boost::filesystem::regular_file);

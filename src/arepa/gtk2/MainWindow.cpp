@@ -47,7 +47,9 @@ void MainWindow::on_record_button_clicked()
 {
 	_isRecording = !_isRecording;
 	if (_isRecording) {
-		_audioProcessor.startRecord(_outputPath);
+		std::ostringstream filenamePrefix;
+		filenamePrefix << "record_" << time(0) << '.';
+		_audioProcessor.startRecord(_outputPath.c_str(), filenamePrefix.str().c_str());
 		_recordingStartedFrame = _audioProcessor.getRecordStartedFrame();
 		_recordingLevelExposedFrame = _recordingStartedFrame - 1U;
 

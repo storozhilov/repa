@@ -17,8 +17,6 @@
 #include <boost/thread/mutex.hpp>
 #include <boost/thread/condition_variable.hpp>
 
-#include <ctime>
-
 class AudioProcessor
 {
 public:
@@ -44,7 +42,7 @@ public:
 		return _recordFinishedFrame.load();
 	}
 
-	time_t startRecord(const std::string& location);
+	void startRecord(const char * location, const char * filenamePrefix);
 	void stopRecord();
 private:
 	typedef std::vector<char> Buffer;
@@ -89,7 +87,7 @@ private:
 	boost::mutex _captureMutex;
 	State _state;
 	std::string _filesLocation;
-	time_t _recordTs;
+	std::string _filenamePrefix;
 	std::size_t _periodsCaptured;
 	std::size_t _periodsProcessed;
 };

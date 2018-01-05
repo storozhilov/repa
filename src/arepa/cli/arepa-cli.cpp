@@ -1,7 +1,7 @@
 #include <iostream>
 #include <csignal>
-
 #include <unistd.h>
+#include <ctime>
 
 #include <boost/date_time/posix_time/posix_time.hpp>
 #include <boost/thread/thread.hpp>
@@ -45,10 +45,15 @@ int main(int argc, char * argv[]) {
 	std::signal(SIGINT, signal_handler);
 
 	AudioProcessor ap(device.c_str());
-	ap.startRecord(location);
+
+	std::ostringstream filenamePrefix;
+	filenamePrefix << "record_" << time(0) << '.';
+	ap.startRecord(location.c_str(), filenamePrefix.str().c_str());
+
 	while (!static_cast<bool>(stopped)) {
 		boost::this_thread::sleep(boost::posix_time::milliseconds(100));
 	}
+
 	std::cout << "Termination command received -> exiting" << std::endl;
 	ap.stopRecord();
 	return 0;

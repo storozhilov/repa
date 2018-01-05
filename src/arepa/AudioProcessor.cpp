@@ -38,7 +38,7 @@ AudioProcessor::AudioProcessor(const char * device) :
 	_captureMutex(),
 	_state(IdleState),
 	_filesLocation(),
-	_recordTs(0U),
+	_filenamePrefix(),
 	_periodsCaptured(0U),
 	_periodsProcessed(0U)
 {
@@ -246,7 +246,7 @@ float AudioProcessor::getCaptureLevel(unsigned int channel, std::size_t after, s
 	_captureChannels[channel]->getLevel(after, end);
 }
 
-time_t AudioProcessor::startRecord(const std::string& location)
+void AudioProcessor::startRecord(const char * location, const char * filenamePrefix)
 {
 	// TODO: Check destination directory is writable.
 	boost::filesystem::file_status s = boost::filesystem::status(location);
@@ -257,9 +257,6 @@ time_t AudioProcessor::startRecord(const std::string& location)
 		throw std::runtime_error(msg.str());
 	}
 
-	time_t recordTs = time(0);
-	assert(recordTs > 0);
-
 	boost::unique_lock<boost::mutex> lock(_captureMutex);
 	if (_state != CaptureState) {
 		std::ostringstream msg;
@@ -269,13 +266,13 @@ time_t AudioProcessor::startRecord(const std::string& location)
 	}
 	_state = RecordRequestedState;
 	_filesLocation = location;
-	_recordTs = recordTs;
+	_filenamePrefix = filenamePrefix;
 	_captureCond.notify_all();
 
 	// Awaiting for state to become 'RecordState'
 	while (true) {
 		if (_state == RecordState) {
-			return recordTs;
+			return;
 		}
 		if ((_state != RecordRequestedState) && (_state != RecordRequestConfirmedState)) {
 			std::ostringstream msg;
@@ -383,7 +380,7 @@ void AudioProcessor::runCapturePostProcessing()
 
 	bool isRecording = false;
 	std::string filesLocation;
-	time_t recordTs;
+	std::string filenamePrefix;
 
 	while (true) {
 		bool shouldCreateFiles = false;
@@ -405,7 +402,7 @@ void AudioProcessor::runCapturePostProcessing()
 				shouldCreateFiles = true;
 				isRecording = true;
 				filesLocation = _filesLocation;
-				recordTs = _recordTs;
+				filenamePrefix = _filenamePrefix;
 			} else if (_state == RecordRequestConfirmedState) {
 				_state = RecordState;
 				_captureCond.notify_all();
@@ -440,7 +437,7 @@ void AudioProcessor::runCapturePostProcessing()
 			std::clog << "NOTICE: AudioProcessor::runCapturePostProcessing(): Start recording command received" << std::endl;
 			for (std::size_t i = 0; i < _captureChannelsCount; ++i) {
 				std::ostringstream filename;
-				filename << "record_" << recordTs << ".track_" <<
+				filename << filenamePrefix << "track_" <<
 					std::setfill('0') << std::setw(2) << (i + 1) << ".wav";
 				boost::filesystem::path fullPath = boost::filesystem::path(filesLocation) /
 					boost::filesystem::path(filename.str());
