@@ -33,6 +33,9 @@ AudioProcessor::AudioProcessor(const char * device) :
 	_recordStartedPeriod(),
 	_recordFinishedPeriod(),
 	_capturedPeriods(0U),
+	_capturedFrames(0U),
+	_recordStartedFrame(),
+	_recordFinishedFrame(),
 	_captureRingBuffer(),
 	_captureCond(),
 	_captureMutex(),
@@ -392,6 +395,7 @@ void AudioProcessor::runCapturePostProcessing()
 
 	std::size_t periodsCaptured;
 	std::size_t periodsProcessed = 0U;
+	std::size_t framesProcessed = 0U;
 
 	bool isRecording = false;
 	std::string filesLocation;
@@ -447,7 +451,8 @@ void AudioProcessor::runCapturePostProcessing()
 		if (shouldCreateFiles) {
 			assert(!shouldCloseFiles);
 
-			_recordStartedPeriod.store(periodsProcessed + 1U);
+			_recordStartedPeriod.store(periodsProcessed + 1U); // TODO: Remove it
+			_recordStartedFrame.store(framesProcessed + 1U);
 
 			std::clog << "NOTICE: AudioProcessor::runCapturePostProcessing(): Start recording command received" << std::endl;
 			for (std::size_t i = 0; i < captureChannelsCount; ++i) {
@@ -465,7 +470,8 @@ void AudioProcessor::runCapturePostProcessing()
 		if (shouldCloseFiles) {
 			assert(!shouldCreateFiles);
 
-			_recordFinishedPeriod.store(periodsProcessed);
+			_recordFinishedPeriod.store(periodsProcessed); // TODO: Remove it
+			_recordFinishedFrame.store(framesProcessed);
 
 			std::clog << "NOTICE: AudioProcessor::runCapturePostProcessing(): Stop recording command received" << std::endl;
 			for (std::size_t i = 0; i < captureChannelsCount; ++i) {
@@ -507,12 +513,14 @@ void AudioProcessor::runCapturePostProcessing()
 			}
 
 			++periodsProcessed;
+			framesProcessed += framesCaptured;
 			for (std::size_t i = 0U; i < captureChannelsCount; ++i) {
 				// Extracting WAV-data for channel
 				char * buf = recordBufferPtr + i * framesInPeriod * bytesPerSample;
 				std::size_t size = framesCaptured * bytesPerSample;
 
 				_capturedPeriods.store(periodsProcessed);
+				_capturedFrames.store(framesProcessed);
 
 				// Updating level
 				_captureChannels[i]->addLevel(periodsProcessed, buf, size);
