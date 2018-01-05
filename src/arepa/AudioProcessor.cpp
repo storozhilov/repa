@@ -98,7 +98,7 @@ AudioProcessor::AudioProcessor(const char * device) :
 	rc = snd_pcm_hw_params_set_format(_handle, params, SND_PCM_FORMAT_S16_LE);
 	if (rc < 0) {
 		std::cerr << "WARNING: AudioProcessor::AudioProcessor('" << device <<
-			"'): Requesting format error: " << snd_strerror(rc) <<std::endl;
+			"'): Requesting format error: " << snd_strerror(rc) << std::endl;
 	}
 
 	unsigned int val = 44100;
@@ -129,11 +129,9 @@ AudioProcessor::AudioProcessor(const char * device) :
 	std::clog << "NOTICE: AudioProcessor::AudioProcessor('" << device << "'): Access type: " <<
 		snd_pcm_access_name(access) << std::endl;
 
-	snd_pcm_format_t format;
-	snd_pcm_hw_params_get_format(params, &format);
-	_format.store(format);
+	snd_pcm_hw_params_get_format(params, &_format);
 	std::clog << "NOTICE: AudioProcessor::AudioProcessor('" << device << "'): Format: " <<
-		snd_pcm_format_name(format) << ", " << snd_pcm_format_description(format) << std::endl;
+		snd_pcm_format_name(_format) << ", " << snd_pcm_format_description(_format) << std::endl;
 
 	snd_pcm_subformat_t subformat;
 	snd_pcm_hw_params_get_subformat(params, &subformat);
@@ -142,15 +140,15 @@ AudioProcessor::AudioProcessor(const char * device) :
 
 	unsigned int rate;
 	snd_pcm_hw_params_get_rate(params, &rate, &dir);
-	_rate.store(rate);
+	_rate = static_cast<std::size_t>(rate);
 	std::clog << "NOTICE: AudioProcessor::AudioProcessor('" << device << "'): Sample rate: " <<
-		rate << " bps" << std::endl;
+		_rate << " bps" << std::endl;
 
 	unsigned int captureChannelsCount;
 	snd_pcm_hw_params_get_channels(params, &captureChannelsCount);
-	_captureChannelsCount.store(captureChannelsCount);
+	_captureChannelsCount = static_cast<std::size_t>(captureChannelsCount);
 	std::clog << "NOTICE: AudioProcessor::AudioProcessor('" << device << "'): Capture channels: " <<
-		captureChannelsCount << std::endl;
+		_captureChannelsCount << std::endl;
 
 	unsigned int periodTime;
 	snd_pcm_hw_params_get_period_time(params, &periodTime, &dir);
@@ -159,9 +157,9 @@ AudioProcessor::AudioProcessor(const char * device) :
 
 	snd_pcm_uframes_t framesInPeriod;
 	snd_pcm_hw_params_get_period_size(params, &framesInPeriod, &dir);
-	_framesInPeriod.store(framesInPeriod);
+	_framesInPeriod = static_cast<std::size_t>(framesInPeriod);
 	std::clog << "NOTICE: AudioProcessor::AudioProcessor('" << device << "'): Period size: " <<
-		framesInPeriod << " frames" << std::endl;
+		_framesInPeriod << " frames" << std::endl;
 
 	unsigned int bufferTime;
 	snd_pcm_hw_params_get_buffer_time(params, &bufferTime, &dir);
@@ -169,26 +167,25 @@ AudioProcessor::AudioProcessor(const char * device) :
 		bufferTime << " us" << std::endl;
 
 	// TODO: Correct bytes per sample calculation
-	std::size_t bytesPerSample = 2;
-	if (format == SND_PCM_FORMAT_S32_LE) {
-		bytesPerSample = 4;
-	} else if (format != SND_PCM_FORMAT_S16_LE) {
+	if (_format == SND_PCM_FORMAT_S32_LE) {
+		_bytesPerSample = 4U;
+	} else if (_format == SND_PCM_FORMAT_S16_LE) {
+		_bytesPerSample = 2U;
+	} else {
 		std::ostringstream msg;
-		msg << "Unsupported format: " << snd_pcm_format_name(format) << '(' <<
-			snd_pcm_format_description(format) << ')';
+		msg << "Unsupported format: " << snd_pcm_format_name(_format) << '(' <<
+			snd_pcm_format_description(_format) << ')';
 		std::cerr << "ERROR: AudioProcessor::AudioProcessor('" << device << "'): " << msg.str() << std::endl;
 		throw std::runtime_error(msg.str());
 	}
-	_bytesPerSample.store(bytesPerSample);
 	std::clog << "NOTICE: AudioProcessor::AudioProcessor('" << device << "'): Bytes per sample: " <<
-		bytesPerSample << std::endl;
+		_bytesPerSample << std::endl;
 
-	std::size_t periodBufferSize = framesInPeriod * captureChannelsCount * bytesPerSample;
-	_periodBufferSize.store(periodBufferSize);
+	_periodBufferSize = _framesInPeriod * _captureChannelsCount * _bytesPerSample;
 	std::clog << "NOTICE: AudioProcessor::AudioProcessor('" << device << "'): Period buffer size: " <<
-		periodBufferSize << std::endl;
+		_periodBufferSize << std::endl;
 
-	std::size_t bufferSize = (periodBufferSize + sizeof(std::size_t)) * PeriodsInBuffer;
+	std::size_t bufferSize = (_periodBufferSize + sizeof(std::size_t)) * PeriodsInBuffer;
 	std::clog << "NOTICE: AudioProcessor::AudioProcessor('" << device << "'): Allocating " <<
 		(bufferSize / 1024U) << " KB (" << bufferSize <<
 		" bytes) capture ring buffer for " << PeriodsInBuffer <<
@@ -196,9 +193,9 @@ AudioProcessor::AudioProcessor(const char * device) :
 	_captureRingBuffer.resize(bufferSize);
 
 	// Recording channels initialization
-	_captureChannels.resize(captureChannelsCount);
+	_captureChannels.resize(_captureChannelsCount);
 	for (std::size_t i = 0; i < _captureChannels.size(); ++i) {
-		_captureChannels[i] = new CaptureChannel(rate, format);
+		_captureChannels[i] = new CaptureChannel(_rate, _format);
 	}
 
 	// Starting capture & record threads
@@ -319,11 +316,8 @@ void AudioProcessor::stopRecord()
 
 void AudioProcessor::runCapture()
 {
-	std::size_t framesInPeriod = _framesInPeriod.load();
-	std::size_t periodBufferSize = _periodBufferSize.load();
-
-	assert(framesInPeriod > 0U);
-	assert(periodBufferSize > 0U);
+	assert(_framesInPeriod > 0U);
+	assert(_periodBufferSize > 0U);
 
 	std::size_t periodsCaptured = 0U;
 	std::size_t periodsProcessed = 0U;
@@ -331,9 +325,9 @@ void AudioProcessor::runCapture()
 
 	while (true) {
 		std::size_t ringBufferOffset = periodsCaptured % PeriodsInBuffer *
-				(periodBufferSize + sizeof(std::size_t));
+				(_periodBufferSize + sizeof(std::size_t));
 		// TODO: Check ring buffer overrun!
-		int rc = snd_pcm_readi(_handle, ringBufferPtr + ringBufferOffset + sizeof(std::size_t), framesInPeriod);
+		int rc = snd_pcm_readi(_handle, ringBufferPtr + ringBufferOffset + sizeof(std::size_t), _framesInPeriod);
 
 		if (rc == -EPIPE) {
 			/* EPIPE means overrun */
@@ -343,7 +337,7 @@ void AudioProcessor::runCapture()
 		} else if (rc < 0) {
 			std::cerr << "ERROR: AudioProcessor::runCapture(): ALSA reading data error: " << snd_strerror(rc) << std::endl;
 			return;
-		} else if (rc != framesInPeriod) {
+		} else if (rc != _framesInPeriod) {
 			// TODO: Check PCM state and exit if not RUNNING?
 		}
 		*reinterpret_cast<std::size_t *>(ringBufferPtr + ringBufferOffset) = static_cast<std::size_t>(rc);
@@ -373,21 +367,14 @@ void AudioProcessor::runCapture()
 
 void AudioProcessor::runCapturePostProcessing()
 {
-	snd_pcm_format_t format = _format.load();
-	unsigned int rate = _rate.load();
-	unsigned int bytesPerSample = _bytesPerSample.load();
-	unsigned int captureChannelsCount = _captureChannelsCount.load();
-	unsigned int framesInPeriod = _framesInPeriod.load();
-	unsigned int periodBufferSize = _periodBufferSize.load();
-
-	assert(rate > 0U);
-	assert(bytesPerSample > 0U);
-	assert(captureChannelsCount > 0U);
-	assert(framesInPeriod > 0U);
-	assert(periodBufferSize > 0U);
+	assert(_rate > 0U);
+	assert(_bytesPerSample > 0U);
+	assert(_captureChannelsCount > 0U);
+	assert(_framesInPeriod > 0U);
+	assert(_periodBufferSize > 0U);
 
 	char * ringBufferPtr = &_captureRingBuffer.front();
-	Buffer recordBuffer(periodBufferSize);
+	Buffer recordBuffer(_periodBufferSize);
 	char * recordBufferPtr = &recordBuffer.front();
 
 	std::size_t periodsCaptured;
@@ -451,7 +438,7 @@ void AudioProcessor::runCapturePostProcessing()
 			_recordStartedFrame.store(framesProcessed + 1U);
 
 			std::clog << "NOTICE: AudioProcessor::runCapturePostProcessing(): Start recording command received" << std::endl;
-			for (std::size_t i = 0; i < captureChannelsCount; ++i) {
+			for (std::size_t i = 0; i < _captureChannelsCount; ++i) {
 				std::ostringstream filename;
 				filename << "record_" << recordTs << ".track_" <<
 					std::setfill('0') << std::setw(2) << (i + 1) << ".wav";
@@ -469,7 +456,7 @@ void AudioProcessor::runCapturePostProcessing()
 			_recordFinishedFrame.store(framesProcessed);
 
 			std::clog << "NOTICE: AudioProcessor::runCapturePostProcessing(): Stop recording command received" << std::endl;
-			for (std::size_t i = 0; i < captureChannelsCount; ++i) {
+			for (std::size_t i = 0; i < _captureChannelsCount; ++i) {
 				_captureChannels[i]->closeFile();
 			}
 		}
@@ -477,20 +464,20 @@ void AudioProcessor::runCapturePostProcessing()
 		// Writing captured data
 		while (periodsProcessed < periodsCaptured) {
 			std::size_t ringBufferOffset = periodsProcessed % PeriodsInBuffer *
-					(periodBufferSize + sizeof(std::size_t));
+					(_periodBufferSize + sizeof(std::size_t));
 			std::size_t framesCaptured = *reinterpret_cast<std::size_t *>(ringBufferPtr + ringBufferOffset);
-			if (framesCaptured != framesInPeriod) {
+			if (framesCaptured != _framesInPeriod) {
 				std::clog << "WARNING: AudioProcessor::runCapturePostProcessing(): ALSA short read: " <<
-						framesCaptured << "/" << framesInPeriod << " frames" << std::endl;
+						framesCaptured << "/" << _framesInPeriod << " frames" << std::endl;
 			}
 
 			// Copying data to record buffer
-			for (std::size_t i = 0; i < (framesCaptured * captureChannelsCount * bytesPerSample); i += bytesPerSample) {
-				std::size_t frame = i / bytesPerSample / captureChannelsCount;
-				std::size_t channel = i / bytesPerSample % captureChannelsCount;
-				std::size_t j = (frame + channel * framesInPeriod) * bytesPerSample;
+			for (std::size_t i = 0; i < (framesCaptured * _captureChannelsCount * _bytesPerSample); i += _bytesPerSample) {
+				std::size_t frame = i / _bytesPerSample / _captureChannelsCount;
+				std::size_t channel = i / _bytesPerSample % _captureChannelsCount;
+				std::size_t j = (frame + channel * _framesInPeriod) * _bytesPerSample;
 
-				switch (bytesPerSample) {
+				switch (_bytesPerSample) {
 					case 2U:
 						*reinterpret_cast<int16_t *>(recordBufferPtr + j) =
 							*reinterpret_cast<int16_t *>(ringBufferPtr + ringBufferOffset + i + sizeof(std::size_t));
@@ -501,7 +488,7 @@ void AudioProcessor::runCapturePostProcessing()
 						break;
 					default:
 						std::ostringstream msg;
-						msg << "Bytes per sample (" << bytesPerSample << ") not supported";
+						msg << "Bytes per sample (" << _bytesPerSample << ") not supported";
 						throw std::runtime_error(msg.str());
 				}
 
@@ -509,10 +496,10 @@ void AudioProcessor::runCapturePostProcessing()
 
 			++periodsProcessed;
 			framesProcessed += framesCaptured;
-			for (std::size_t i = 0U; i < captureChannelsCount; ++i) {
+			for (std::size_t i = 0U; i < _captureChannelsCount; ++i) {
 				// Extracting WAV-data for channel
-				char * buf = recordBufferPtr + i * framesInPeriod * bytesPerSample;
-				std::size_t size = framesCaptured * bytesPerSample;
+				char * buf = recordBufferPtr + i * _framesInPeriod * _bytesPerSample;
+				std::size_t size = framesCaptured * _bytesPerSample;
 
 				_capturedFrames.store(framesProcessed);
 

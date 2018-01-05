@@ -25,9 +25,9 @@ public:
 	AudioProcessor(const char * device);
 	~AudioProcessor();
 
-	inline unsigned int getCaptureChannels() const
+	inline std::size_t getCaptureChannels() const
 	{
-		return _captureChannelsCount.load();
+		return _captureChannelsCount;
 	}
 	float getCaptureLevel(unsigned int channel, std::size_t after, std::size_t end);
 
@@ -61,12 +61,12 @@ private:
 	CaptureChannels _captureChannels;
 
 	const std::string _device;
-	boost::atomic<snd_pcm_format_t> _format;
-	boost::atomic<unsigned int> _rate;
-	boost::atomic<unsigned int> _bytesPerSample;
-	boost::atomic<unsigned int> _captureChannelsCount;
-	boost::atomic<unsigned int> _framesInPeriod;
-	boost::atomic<std::size_t> _periodBufferSize;
+	snd_pcm_format_t _format;
+	std::size_t _rate;
+	std::size_t _bytesPerSample;
+	std::size_t _captureChannelsCount;
+	std::size_t _framesInPeriod;
+	std::size_t _periodBufferSize;
 
 	boost::atomic<std::size_t> _capturedFrames;
 	boost::atomic<std::size_t> _recordStartedFrame;
