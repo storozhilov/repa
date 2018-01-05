@@ -31,20 +31,6 @@ public:
 	}
 	float getCaptureLevel(unsigned int channel, std::size_t after, std::size_t end);
 
-	// TODO: Get rid of 3 methods below
-	inline std::size_t getRecordStartedPeriod() const
-	{
-		return _recordStartedPeriod.load();
-	}
-	inline std::size_t getRecordFinishedPeriod() const
-	{
-		return _recordFinishedPeriod.load();
-	}
-	inline std::size_t getCapturedPeriods() const
-	{
-		return _capturedPeriods.load();
-	}
-
 	inline std::size_t getCapturedFrames() const
 	{
 		return _capturedFrames.load();
@@ -81,10 +67,6 @@ private:
 	boost::atomic<unsigned int> _captureChannelsCount;
 	boost::atomic<unsigned int> _framesInPeriod;
 	boost::atomic<std::size_t> _periodBufferSize;
-
-	boost::atomic<std::size_t> _recordStartedPeriod; // TODO: Remove it
-	boost::atomic<std::size_t> _recordFinishedPeriod; // TODO: Remove it
-	boost::atomic<std::size_t> _capturedPeriods; // TODO: Remove it
 
 	boost::atomic<std::size_t> _capturedFrames;
 	boost::atomic<std::size_t> _recordStartedFrame;

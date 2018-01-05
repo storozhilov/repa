@@ -40,16 +40,12 @@ TEST_F(AudioProcessorTest, RecordASecond)
 
 	time_t recordTs = _ap->startRecord("tmp_tests");
 
-	std::size_t recordStartedPeriod = _ap->getRecordStartedPeriod();
-	EXPECT_GT(recordStartedPeriod, 0U);
 	std::size_t recordStartedFrame = _ap->getRecordStartedFrame();
 	EXPECT_GT(recordStartedFrame, 0U);
 
 	boost::this_thread::sleep_for(boost::chrono::milliseconds(1 * 1000));
 	_ap->stopRecord();
 
-	std::size_t recordFinishedPeriod = _ap->getRecordFinishedPeriod();
-	EXPECT_GT(recordFinishedPeriod, recordStartedPeriod);
 	std::size_t recordFinishedFrame = _ap->getRecordFinishedFrame();
 	EXPECT_GT(recordFinishedFrame, recordStartedFrame);
 	std::size_t capturedFrames = _ap->getCapturedFrames();

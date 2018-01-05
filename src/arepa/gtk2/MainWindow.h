@@ -41,10 +41,10 @@ private:
 	const Glib::ustring _outputPath;
 
 	bool _isRecording;
-	std::size_t _recordingStartedPeriod;
-	std::size_t _recordingFinishedPeriod;
-	std::size_t _recordingExposedPeriod;
-	std::size_t _volumeScannedPeriod;
+	std::size_t _recordingStartedFrame;
+	std::size_t _recordingFinishedFrame;
+	std::size_t _recordingLevelExposedFrame;
+	std::size_t _volumeScannedFrame;
 
 	Gtk::VBox _vbox;
 	Gtk::HButtonBox _buttonBox;
