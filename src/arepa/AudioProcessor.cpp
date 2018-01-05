@@ -493,11 +493,11 @@ void AudioProcessor::runCapturePostProcessing()
 
 			++periodsProcessed;
 			framesProcessed += framesCaptured;
+			std::size_t size = framesCaptured * _bytesPerSample;
 
 			for (std::size_t i = 0U; i < _captureChannelsCount; ++i) {
 				// Extracting WAV-data for channel
 				char * buf = recordBufferPtr + i * _framesInPeriod * _bytesPerSample;
-				std::size_t size = framesCaptured * _bytesPerSample;
 
 				// Updating level
 				_captureChannels[i]->addLevel(framesProcessed, buf, size);
