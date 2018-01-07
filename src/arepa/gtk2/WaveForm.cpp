@@ -3,8 +3,9 @@
 #include <iostream>
 #include <cassert>
 
-WaveForm::WaveForm() :
+WaveForm::WaveForm(bool isRecording) :
 	Gtk::DrawingArea(),
+	_isRecording(isRecording),
 	_levels()
 {
 #ifndef GLIBMM_DEFAULT_SIGNAL_HANDLERS_ENABLED
@@ -42,16 +43,32 @@ bool WaveForm::on_expose_event(GdkEventExpose * event)
 	// Drawing background
 	auto waveFormColor = get_style()->get_light(Gtk::STATE_NORMAL);
 	cr->set_source_rgb(waveFormColor.get_red_p(), waveFormColor.get_green_p(), waveFormColor.get_blue_p());
+	cr->set_line_width(0.5);
 
 	// Drawing wave-form
 	for (auto i = 0U; i < _levels.size(); ++i) {
+		if (_isRecording && ((i + 1U) == _levels.size())) {
+			break;
+		}
+
 		auto topY = static_cast<int>(
 				(static_cast<double>(height) - static_cast<double>(height) * _levels[i]) / 2.0);
 		auto bottomY = height - topY;
 		cr->move_to(i, topY);
 		cr->line_to(i, (topY == bottomY) ? bottomY + 1U : bottomY);
+
 	}
 	cr->stroke();
+
+	// Drawing a current position vertical line
+	if (_isRecording) {
+		auto vLineColor = get_style()->get_black();
+		cr->set_source_rgb(vLineColor.get_red_p(), vLineColor.get_green_p(), vLineColor.get_blue_p());
+		cr->set_line_width(0.5);
+		cr->move_to(width - 1, 0);
+		cr->line_to(width - 1, height - 1);
+		cr->stroke();
+	}
 
 	return true;
 }

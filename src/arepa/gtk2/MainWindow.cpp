@@ -58,7 +58,7 @@ void MainWindow::on_record_button_clicked()
 
 		std::unique_ptr<Recording> recording(new Recording(_audioProcessor.getCaptureChannels(), _recordingStartedFrame));
 		for (auto i = 0U; i < _audioProcessor.getCaptureChannels(); ++i) {
-			recording->waveForms[i] = manage(new WaveForm());
+			recording->waveForms[i] = manage(new WaveForm(true));
 			//_channelsHBoxes[i]->pack_start(*recording->waveForms[i], Gtk::PACK_EXPAND_WIDGET);
 			_channelsHBoxes[i]->pack_start(*recording->waveForms[i], Gtk::PACK_SHRINK);
 		}
@@ -100,6 +100,8 @@ bool MainWindow::on_waveforms_update_timeout()
 	std::size_t capturedFrames = _audioProcessor.getCapturedFrames();
 	std::size_t newRecordingLevelExposedFrame = _isRecording ? capturedFrames : _recordingFinishedFrame;
 	for (std::size_t i = 0U; i < _audioProcessor.getCaptureChannels(); ++i) {
+		_recordings.back()->waveForms[i]->setIsRecording(_isRecording);
+		// TODO: Check new frames captured
 		float level = _audioProcessor.getCaptureLevel(i, _recordingLevelExposedFrame, newRecordingLevelExposedFrame);
 		_recordings.back()->waveForms[i]->addLevel(level);
 	}
