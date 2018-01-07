@@ -6,8 +6,6 @@
 #define ALSA_PCM_NEW_HW_PARAMS_API
 #include <alsa/asoundlib.h>
 
-#include <sndfile.hh>
-
 #include <vector>
 
 #include <boost/atomic.hpp>
