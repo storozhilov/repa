@@ -3,11 +3,19 @@
 #include <iostream>
 #include <cassert>
 
+namespace {
+
+const Glib::ustring VerticalLineColorName("MidnightBlue");
+
+}
+
 WaveForm::WaveForm(bool isRecording) :
 	Gtk::DrawingArea(),
 	_isRecording(isRecording),
-	_levels()
+	_levels(),
+	_vLineColor(VerticalLineColorName)
 {
+	Gdk::Colormap::get_system()->alloc_color(_vLineColor);
 #ifndef GLIBMM_DEFAULT_SIGNAL_HANDLERS_ENABLED
 	signal_expose_event().connect(sigc::mem_fun(*this, &WaveForm::on_expose_event), false);
 #endif //GLIBMM_DEFAULT_SIGNAL_HANDLERS_ENABLED
@@ -35,17 +43,17 @@ bool WaveForm::on_expose_event(GdkEventExpose * event)
 	cr->rectangle(event->area.x, event->area.y, event->area.width, event->area.height);
 	cr->clip();
 
-	auto bgColor = get_style()->get_dark(Gtk::STATE_NORMAL);
+	// Drawing background
+	auto bgColor = get_style()->get_dark(_isRecording ? Gtk::STATE_INSENSITIVE : Gtk::STATE_NORMAL);
 	cr->set_source_rgb(bgColor.get_red_p(), bgColor.get_green_p(), bgColor.get_blue_p());
 	cr->rectangle(event->area.x, event->area.y, event->area.width, event->area.height);
 	cr->fill();
 
-	// Drawing background
-	auto waveFormColor = get_style()->get_light(Gtk::STATE_NORMAL);
+	// Drawing wave-form
+	auto waveFormColor = get_style()->get_light(_isRecording ? Gtk::STATE_INSENSITIVE : Gtk::STATE_NORMAL);
 	cr->set_source_rgb(waveFormColor.get_red_p(), waveFormColor.get_green_p(), waveFormColor.get_blue_p());
 	cr->set_line_width(0.5);
 
-	// Drawing wave-form
 	for (auto i = 0U; i < _levels.size(); ++i) {
 		if (_isRecording && ((i + 1U) == _levels.size())) {
 			break;
@@ -62,9 +70,8 @@ bool WaveForm::on_expose_event(GdkEventExpose * event)
 
 	// Drawing a current position vertical line
 	if (_isRecording) {
-		auto vLineColor = get_style()->get_black();
-		cr->set_source_rgb(vLineColor.get_red_p(), vLineColor.get_green_p(), vLineColor.get_blue_p());
-		cr->set_line_width(0.5);
+		cr->set_source_rgb(_vLineColor.get_red_p(), _vLineColor.get_green_p(), _vLineColor.get_blue_p());
+		cr->set_line_width(1.0);
 		cr->move_to(width - 1, 0);
 		cr->line_to(width - 1, height - 1);
 		cr->stroke();

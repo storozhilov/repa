@@ -19,6 +19,7 @@ private:
 
 	bool _isRecording;
 	LevelsContainer _levels;
+	Gdk::Color _vLineColor;
 };
 
 #endif
