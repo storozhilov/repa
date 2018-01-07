@@ -34,19 +34,24 @@ bool WaveForm::on_expose_event(GdkEventExpose * event)
 	cr->rectangle(event->area.x, event->area.y, event->area.width, event->area.height);
 	cr->clip();
 
-	auto waveFormColor = get_style()->get_dark(Gtk::STATE_INSENSITIVE);
-	cr->set_source_rgb(
-			static_cast<float>(waveFormColor.get_red()) / static_cast<float>(std::numeric_limits<gushort>::max()),
-			static_cast<float>(waveFormColor.get_green()) / static_cast<float>(std::numeric_limits<gushort>::max()),
-			static_cast<float>(waveFormColor.get_blue()) / static_cast<float>(std::numeric_limits<gushort>::max()));
+	auto bgColor = get_style()->get_dark(Gtk::STATE_NORMAL);
+	cr->set_source_rgb(bgColor.get_red_p(), bgColor.get_green_p(), bgColor.get_blue_p());
+	cr->rectangle(event->area.x, event->area.y, event->area.width, event->area.height);
+	cr->fill();
 
+	// Drawing background
+	auto waveFormColor = get_style()->get_light(Gtk::STATE_NORMAL);
+	cr->set_source_rgb(waveFormColor.get_red_p(), waveFormColor.get_green_p(), waveFormColor.get_blue_p());
+
+	// Drawing wave-form
 	for (auto i = 0U; i < _levels.size(); ++i) {
 		auto topY = static_cast<int>(
-				(static_cast<float>(height) - static_cast<float>(height) * _levels[i]) / 2.0F);
+				(static_cast<double>(height) - static_cast<double>(height) * _levels[i]) / 2.0);
 		auto bottomY = height - topY;
 		cr->move_to(i, topY);
 		cr->line_to(i, (topY == bottomY) ? bottomY + 1U : bottomY);
-		cr->stroke_preserve();
 	}
+	cr->stroke();
+
 	return true;
 }
