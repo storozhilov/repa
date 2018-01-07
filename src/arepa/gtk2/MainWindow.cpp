@@ -80,11 +80,18 @@ void MainWindow::on_record_button_clicked()
 bool MainWindow::on_level_polling_timeout()
 {
 	std::size_t capturedFrames = _audioProcessor.getCapturedFrames();
+	assert(capturedFrames >= _volumeScannedFrame);
+	if (capturedFrames == _volumeScannedFrame) {
+		std::clog << "NOTICE: MainWindow::on_level_polling_timeout(): No new frames were captured since last poll" << std::endl;
+		return true;
+	}
+
 	for (std::size_t i = 0U; i < _audioProcessor.getCaptureChannels(); ++i) {
 		float level = _audioProcessor.getCaptureLevel(i, _volumeScannedFrame, capturedFrames);
 		_levelIndicators[i]->set_fraction(level);
 	}
 	_volumeScannedFrame = capturedFrames;
+
 	return true;
 }
 
