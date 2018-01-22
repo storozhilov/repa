@@ -15,6 +15,7 @@ namespace
 
 // TODO: Make it configurable
 std::size_t const PeriodsInBuffer = 1024U;
+std::size_t const PeriodsToCollect = 256U;
 
 class AlsaCleaner {
 public:
@@ -267,6 +268,7 @@ void MultitrackRecorder::runCapture()
 	std::size_t periodBufferSize = _periodBufferSize.load();
 
 	std::size_t periodsCaptured = 0U;
+	std::size_t periodsRecorded = 0U;
 	char * ringBufferPtr = &_captureRingBuffer.front();
 
 	while (_shouldRun.load()) {
@@ -290,7 +292,10 @@ void MultitrackRecorder::runCapture()
 
 		boost::unique_lock<boost::mutex> lock(_captureMutex);
 		_periodsCaptured = periodsCaptured;
-		_captureCond.notify_all();
+		periodsRecorded = _periodsRecorded;
+		if ((_periodsCaptured - _periodsRecorded) >= PeriodsToCollect) { 
+			_captureCond.notify_all();
+		}
 	}
 }
 
@@ -315,12 +320,12 @@ void MultitrackRecorder::runRecord()
 		// Waiting for data to be captured
 		boost::unique_lock<boost::mutex> lock(_captureMutex);
 		_periodsRecorded = periodsRecorded;
-		while (_periodsRecorded >= _periodsCaptured) {
-			assert(_periodsRecorded == _periodsCaptured);
+		while ((_periodsCaptured - _periodsRecorded) < PeriodsToCollect) {
+			assert(_periodsCaptured >= _periodsCaptured);
 
 			_captureCond.wait(lock);
 			if (!_shouldRun.load()) {
-				return;
+				break;
 			}
 		}
 		periodsCaptured = _periodsCaptured;
